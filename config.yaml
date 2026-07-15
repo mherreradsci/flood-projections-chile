@@ -48,11 +48,19 @@ modelo:
   factor_volumen_defecto: 1.0
 
 pronostico:
-  modelo: gfs
+  modelo: gfs        # gfs | ifs (ECMWF open-data 0.25°)
   producto: pgrb2.0p25
   horas: 72          # horizonte de acumulación (h)
   # si el GRIB no trae altura de isoterma 0 utilizable, respaldo:
   isoterma0_defecto_m: 3000
+
+sentinel1:
+  # openEO en Copernicus Dataspace (cuenta gratuita: dataspace.copernicus.eu)
+  backend: "openeo.dataspace.copernicus.eu"
+  coleccion: SENTINEL1_GRD
+  resolucion_m: 90        # resolución de proceso server-side
+  umbral_db: -18.0        # sigma0 VV bajo esto = agua
+  hand_max_filtro_m: 30   # descarta detecciones altas sobre el drenaje (sombra radar)
 
 escenarios:
   extremo_200mm:
@@ -73,10 +81,25 @@ calibracion:
   # DMC/DGA publicados; ajustable si se dispone de CR2MET local.
   eventos:
     - nombre: agosto_2002
+      fuente: gfd
       inicio: "2002-08-24"
       fin: "2002-08-29"
       precipitacion_mm: 90
       isoterma0_m: 2500
+    # Eventos con máscara de agua Sentinel-1 (openEO/CDSE). La ventana se
+    # extiende unos días tras el peak para capturar la pasada del satélite.
+    - nombre: marzo_2015
+      fuente: sentinel1
+      inicio: "2015-03-25"
+      fin: "2015-04-04"
+      precipitacion_mm: 70
+      isoterma0_m: 3800
+    - nombre: mayo_2017
+      fuente: sentinel1
+      inicio: "2017-05-11"
+      fin: "2017-05-20"
+      precipitacion_mm: 110
+      isoterma0_m: 2600
   # rango de búsqueda del factor de volumen por subcuenca
   factor_min: 0.05
   factor_max: 8.0
@@ -86,3 +109,5 @@ exposicion:
   # consultas OSM sobre las zonas proyectadas
   vias: ["motorway", "trunk", "primary", "secondary", "tertiary", "residential"]
   servicios: ["hospital", "clinic", "school", "fire_station", "police"]
+  # overpass-api.de banea tras consultas masivas; usar espejo por defecto
+  overpass_endpoint: "https://overpass.kumi.systems/api"

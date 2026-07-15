@@ -116,25 +116,43 @@ def descargar_huella_evento(cfg: dict, evento_cfg: dict,
     return None
 
 
+def construir_union(cfg: dict) -> Path | None:
+    """Une todas las huellas de evento existentes (GFD y Sentinel-1)."""
+    huellas = [p for p in ruta_data(cfg, "historical", "x").parent.glob("huella_*.tif")
+               if p.name != "huella_historica_union.tif"]
+    if not huellas:
+        return None
+    dem, transform_dem, _ = leer_raster(ruta_data(cfg, "dem", "dem.tif"))
+    union = np.zeros(dem.shape, dtype="uint8")
+    for ruta in huellas:
+        union |= (leer_raster(ruta)[0] == 1).astype("uint8")
+    destino = ruta_data(cfg, "historical", "huella_historica_union.tif")
+    guardar_raster(destino, union, transform_dem, nodata=255, dtype="uint8")
+    log.info("Unión histórica (%d eventos): %d celdas", len(huellas), int(union.sum()))
+    return destino
+
+
 def preparar_huellas(cfg: dict) -> dict[str, Path]:
-    """Descarga las huellas de los eventos de calibración y su unión histórica."""
-    catalogo = listar_eventos_gfd()
-    log.info("Catálogo GFD: %d eventos globales", len(catalogo))
+    """Descarga las huellas GFD de los eventos de calibración y rehace la unión."""
+    eventos_gfd = [e for e in cfg["calibracion"]["eventos"]
+                   if e.get("fuente", "gfd") == "gfd"]
     rutas = {}
-    for ev in cfg["calibracion"]["eventos"]:
-        ruta = descargar_huella_evento(cfg, ev, catalogo)
+    pendientes = [e for e in eventos_gfd
+                  if not ruta_data(cfg, "historical",
+                                   f"huella_{e['nombre']}.tif").exists()]
+    catalogo = listar_eventos_gfd() if pendientes else []
+    if catalogo:
+        log.info("Catálogo GFD: %d eventos globales", len(catalogo))
+    for ev in eventos_gfd:
+        destino = ruta_data(cfg, "historical", f"huella_{ev['nombre']}.tif")
+        ruta = destino if destino.exists() else \
+            descargar_huella_evento(cfg, ev, catalogo)
         if ruta:
             rutas[ev["nombre"]] = ruta
 
-    if rutas:
-        dem, transform_dem, _ = leer_raster(ruta_data(cfg, "dem", "dem.tif"))
-        union = np.zeros(dem.shape, dtype="uint8")
-        for ruta in rutas.values():
-            union |= leer_raster(ruta)[0].astype("uint8")
-        destino = ruta_data(cfg, "historical", "huella_historica_union.tif")
-        guardar_raster(destino, union, transform_dem, nodata=255, dtype="uint8")
-        rutas["union"] = destino
-        log.info("Unión histórica: %d celdas", int(union.sum()))
+    union = construir_union(cfg)
+    if union:
+        rutas["union"] = union
     return rutas
 
 

@@ -25,7 +25,7 @@ from inundaciones.utils import cargar_config, log
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--fuente", choices=["gfs", "escenario"], default="gfs")
+    parser.add_argument("--fuente", choices=["gfs", "ifs", "escenario"], default="gfs")
     parser.add_argument("--escenario", default="extremo_200mm",
                         help="nombre del escenario en config.yaml")
     parser.add_argument("--sin-exposicion", action="store_true",
@@ -33,9 +33,9 @@ def main():
     args = parser.parse_args()
 
     cfg = cargar_config()
-    if args.fuente == "gfs":
-        ingest_forecast.descargar_gfs(cfg)
-        sufijo = "gfs"
+    if args.fuente in ("gfs", "ifs"):
+        ingest_forecast.descargar_pronostico(cfg, modelo=args.fuente)
+        sufijo = args.fuente
     else:
         ingest_forecast.generar_escenario(cfg, args.escenario)
         sufijo = args.escenario

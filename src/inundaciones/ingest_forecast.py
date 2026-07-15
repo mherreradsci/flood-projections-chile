@@ -119,6 +119,90 @@ def descargar_gfs(cfg: dict) -> tuple[Path, dict]:
     return destino, meta
 
 
+def descargar_ifs(cfg: dict) -> tuple[Path, dict]:
+    """ECMWF IFS open-data 0.25°: tp acumulado a N horas + isoterma 0.
+
+    En IFS open-data `tp` viene acumulado desde la inicialización, así que
+    basta el paso final. La isoterma 0 se interpola del perfil medio t/gh en
+    niveles de presión (el open-data no publica el nivel de congelación).
+    """
+    import xarray as xr
+    from ecmwf.opendata import Client
+
+    horas = int(cfg["pronostico"]["horas"])
+    o, s, e, n = cfg["region"]["bbox"]
+    cliente = Client(source="ecmwf", model="ifs", resol="0p25")
+
+    tmp_tp = ruta_data(cfg, "forecast", "ifs_tp.grib2")
+    r = cliente.retrieve(type="fc", param="tp", step=horas, target=str(tmp_tp))
+    ciclo = r.datetime
+
+    ds = xr.open_dataset(tmp_tp, engine="cfgrib",
+                         backend_kwargs={"indexpath": ""})
+    da = ds["tp"]
+    lons = da.longitude.values
+    if lons.max() > 180:  # normalizar 0–360 → -180–180
+        da = da.assign_coords(longitude=(("longitude"),
+                                         (lons + 180) % 360 - 180)).sortby("longitude")
+    sub = da.sel(latitude=slice(n + 0.5, s - 0.5), longitude=slice(o - 0.5, e + 0.5))
+    precip = sub.values * 1000.0  # m → mm
+    res = float(abs(sub.longitude.values[1] - sub.longitude.values[0]))
+    transform = rasterio.transform.from_origin(
+        float(sub.longitude.values[0]) - res / 2,
+        float(sub.latitude.values[0]) + res / 2, res, res)
+
+    # isoterma 0: perfil medio del bbox con t/gh en niveles de presión
+    isoterma = cfg["pronostico"]["isoterma0_defecto_m"]
+    try:
+        tmp_pl = ruta_data(cfg, "forecast", "ifs_pl.grib2")
+        cliente.retrieve(type="fc", param=["t", "gh"], levelist=[1000, 925, 850, 700, 500],
+                         step=horas // 2, target=str(tmp_pl))
+        dpl = xr.open_dataset(tmp_pl, engine="cfgrib",
+                              backend_kwargs={"indexpath": ""})
+        lons_pl = dpl.longitude.values
+        if lons_pl.max() > 180:
+            dpl = dpl.assign_coords(longitude=(("longitude"),
+                                               (lons_pl + 180) % 360 - 180)).sortby("longitude")
+        perfil = dpl.sel(latitude=slice(n + 0.5, s - 0.5),
+                         longitude=slice(o - 0.5, e + 0.5)).mean(
+                             dim=["latitude", "longitude"])
+        t = perfil["t"].values      # K, por nivel
+        z = perfil["gh"].values     # m geopotencial
+        orden = np.argsort(z)
+        t, z = t[orden], z[orden]
+        cruces = np.nonzero((t[:-1] - 273.15) * (t[1:] - 273.15) <= 0)[0]
+        if cruces.size:
+            i = cruces[-1]  # cruce más alto (perfil puede tener inversiones)
+            frac = (273.15 - t[i]) / (t[i + 1] - t[i])
+            isoterma = float(z[i] + frac * (z[i + 1] - z[i]))
+    except Exception as exc:
+        log.warning("Isoterma IFS no disponible (%s); uso %d m", exc, isoterma)
+
+    precip_dem = _a_grilla_dem(cfg, precip, transform, "EPSG:4326")
+    destino = ruta_data(cfg, "forecast", "precip_mm.tif")
+    guardar_raster(destino, precip_dem, _grilla_dem(cfg)[1], nodata=-9999)
+    meta = {
+        "fuente": "ifs",
+        "ciclo": ciclo.isoformat(),
+        "horas": horas,
+        "isoterma0_m": round(isoterma),
+        "precip_max_mm": round(float(np.nanmax(precip_dem)), 1),
+        "precip_media_mm": round(float(np.nanmean(precip_dem)), 1),
+    }
+    ruta_data(cfg, "forecast", "meta.json").write_text(json.dumps(meta, indent=2))
+    log.info("IFS %s: máx %.0f mm / media %.0f mm en %d h, isoterma 0 ≈ %d m",
+             meta["ciclo"], meta["precip_max_mm"], meta["precip_media_mm"],
+             horas, meta["isoterma0_m"])
+    return destino, meta
+
+
+def descargar_pronostico(cfg: dict, modelo: str | None = None) -> tuple[Path, dict]:
+    modelo = modelo or cfg["pronostico"]["modelo"]
+    if modelo == "ifs":
+        return descargar_ifs(cfg)
+    return descargar_gfs(cfg)
+
+
 def generar_escenario(cfg: dict, nombre: str) -> tuple[Path, dict]:
     """Campo uniforme de precipitación según un escenario de config.yaml."""
     esc = cfg["escenarios"][nombre]
