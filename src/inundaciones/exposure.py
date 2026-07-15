@@ -49,12 +49,24 @@ def descargar_osm_region(cfg: dict) -> dict[str, Path]:
         log.info("OSM servicios región: %d puntos", len(serv))
 
     if not ruta_vias.exists():
-        vias = ox.features_from_bbox((o, s, e, n),
-                                     {"highway": cfg["exposicion"]["vias"]})
-        vias = vias.reset_index()
-        vias = vias[vias.geometry.geom_type.isin(["LineString", "MultiLineString"])]
+        # Overpass no tolera consultas de vías regionales (bans/502); se usa
+        # el extracto oficial Geofabrik de Chile (HTTP directo, una sola vez)
+        import requests
+        zip_local = ruta_data(cfg, "vector", "chile-latest-free.shp.zip")
+        if not zip_local.exists():
+            url = "https://download.geofabrik.de/south-america/chile-latest-free.shp.zip"
+            log.info("Descargando extracto OSM Geofabrik Chile (~400 MB)…")
+            with requests.get(url, stream=True, timeout=1800) as r:
+                r.raise_for_status()
+                with open(zip_local, "wb") as fh:
+                    for chunk in r.iter_content(chunk_size=1 << 20):
+                        fh.write(chunk)
+        vias = gpd.read_file(f"zip://{zip_local}!gis_osm_roads_free_1.shp",
+                             bbox=(o, s, e, n))
+        vias = vias[vias.fclass.isin(cfg["exposicion"]["vias"])]
+        vias = vias.rename(columns={"fclass": "highway"})
         vias[["highway", "geometry"]].to_file(ruta_vias, driver="GPKG")
-        log.info("OSM vías región: %d tramos", len(vias))
+        log.info("OSM vías región (Geofabrik): %d tramos", len(vias))
 
     return {"vias": ruta_vias, "servicios": ruta_serv}
 
@@ -84,9 +96,9 @@ def evaluar_exposicion(cfg: dict, sufijo: str = "proyectada") -> Path:
         serv = gpd.read_file(capas["servicios"])
         dentro = serv[serv.geometry.within(poligono)]
         resumen["servicios"] = [
-            {"tipo": f.amenity, "nombre": f.get("name") or "s/n",
-             "lon": f.geometry.x, "lat": f.geometry.y}
-            for f in dentro.itertuples()]
+            {"tipo": fila["amenity"], "nombre": fila.get("name") or "s/n",
+             "lon": fila.geometry.x, "lat": fila.geometry.y}
+            for _, fila in dentro.iterrows()]
 
         vias = gpd.read_file(capas["vias"])
         afectadas = gpd.clip(vias, poligono)
