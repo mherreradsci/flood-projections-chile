@@ -48,8 +48,10 @@ def obtener_subcuencas(cfg: dict) -> gpd.GeoDataFrame:
     region = obtener_region(cfg)
     bbox = tuple(region.total_bounds)
     cuencas = gpd.read_file(f"zip://{zip_local}", bbox=bbox)
-    # conservar subcuencas cuyo centroide cae en la región (evita bordes ajenos)
-    dentro = cuencas[cuencas.geometry.centroid.within(region.union_all())]
+    # conservar subcuencas cuyo punto representativo cae en la región
+    # (representative_point no dispara el warning de CRS geográfico y
+    # siempre queda dentro del polígono, a diferencia del centroide)
+    dentro = cuencas[cuencas.geometry.representative_point().within(region.union_all())]
     if dentro.empty:
         dentro = cuencas
     dentro = dentro[["HYBAS_ID", "NEXT_DOWN", "SUB_AREA", "geometry"]].copy()

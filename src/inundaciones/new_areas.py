@@ -39,8 +39,8 @@ def identificar_zonas_nuevas(cfg: dict, sufijo: str = "proyectada") -> dict[str,
                        dtype="uint8")
         gdf = _vectorizar(mascara, transform)
         if not gdf.empty:
-            gdf["area_km2"] = gdf.geometry.area / gdf.geometry.area.sum() \
-                * float(mascara.sum()) * celda_km2
+            # área real en UTM 19S (medir en CRS geográfico sesga con cos(lat))
+            gdf["area_km2"] = gdf.geometry.to_crs(32719).area / 1e6
             gdf = gdf[gdf.area_km2 >= AREA_MINIMA_CELDAS * celda_km2]
         geojson = ruta_outputs(cfg, f"{nombre}_{sufijo}.geojson")
         gdf.to_file(geojson, driver="GeoJSON")
