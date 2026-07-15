@@ -108,19 +108,22 @@ def generar_mapa(cfg: dict, sufijo: str = "proyectada") -> Path:
                                show=False).add_to(mapa)
 
     generado = datetime.now()
-    ciclo_txt, ciclo_tag = "", ""
+    ciclo_tag = ""
     if meta.get("ciclo"):
         ciclo_dt = datetime.fromisoformat(meta["ciclo"])
-        ciclo_txt = f" (ciclo {ciclo_dt:%H} UTC)"
         ciclo_tag = f"_{ciclo_dt:%H}utc"
+        fuente_txt = (f"Fuente lluvia: {meta['fuente'].upper()} "
+                      f"(ciclo {ciclo_dt:%H} UTC) | acumulado máx "
+                      f"{meta['precip_max_mm']} mm / {meta['horas']} h")
+    else:
+        fuente_txt = (f"Escenario sintético: {meta['precip_max_mm']} mm / "
+                      f"{meta['horas']} h uniformes (no depende de ciclo GFS)")
 
     titulo = (f"<div style='position:fixed;top:10px;left:60px;z-index:1000;"
               f"background:rgba(255,255,255,.92);padding:8px 14px;border-radius:6px;"
               f"box-shadow:0 1px 4px rgba(0,0,0,.3);font-family:sans-serif'>"
               f"<b>Proyección de anegamientos — Región de Coquimbo</b><br>"
-              f"Fuente lluvia: {meta['fuente']}{ciclo_txt} | acumulado máx "
-              f"{meta['precip_max_mm']} mm / {meta['horas']} h | "
-              f"isoterma 0: {meta['isoterma0_m']} m<br>"
+              f"{fuente_txt} | isoterma 0: {meta['isoterma0_m']} m<br>"
               f"<span style='color:#666;font-size:0.85em'>generado: "
               f"{generado:%d-%m-%Y %H:%M:%S}</span></div>")
     mapa.get_root().html.add_child(folium.Element(titulo))
