@@ -33,12 +33,18 @@ def _leer_reducido(ruta: Path) -> tuple[np.ndarray, list]:
 
 
 def _overlay(mapa, ruta, nombre, cmap, vmax=None, opacidad=0.65, mostrar=True,
-             umbral=0.0):
+             umbral=0.0, gradual=False):
     datos, bounds = _leer_reducido(ruta)
     vmax = vmax or float(np.nanmax(datos)) or 1.0
     norm = matplotlib.colors.Normalize(vmin=0, vmax=vmax)
-    rgba = matplotlib.colormaps[cmap](norm(np.nan_to_num(datos)))
-    rgba[..., 3] = np.where(np.nan_to_num(datos) > umbral, opacidad, 0.0)
+    valores = np.nan_to_num(datos)
+    rgba = matplotlib.colormaps[cmap](norm(valores))
+    if gradual:
+        # transparencia proporcional a la intensidad: no tapa el fondo
+        rgba[..., 3] = np.clip(norm(valores), 0.0, 1.0) * opacidad
+        rgba[valores <= umbral, 3] = 0.0
+    else:
+        rgba[..., 3] = np.where(valores > umbral, opacidad, 0.0)
     folium.raster_layers.ImageOverlay(
         image=rgba, bounds=bounds, name=nombre, show=mostrar, zindex=2,
     ).add_to(mapa)
@@ -51,10 +57,11 @@ def generar_mapa(cfg: dict, sufijo: str = "proyectada") -> Path:
     mapa = folium.Map(location=[(s + n) / 2, (o + e) / 2], zoom_start=8,
                       tiles="cartodbpositron", control_scale=True)
 
-    # precipitación
+    # precipitación (alfa gradual: los núcleos intensos resaltan, el resto
+    # deja ver el mapa base)
     _overlay(mapa, ruta_data(cfg, "forecast", "precip_mm.tif"),
-             "Precipitación pronosticada (mm)", "Blues", opacidad=0.45,
-             mostrar=False, umbral=1.0)
+             "Precipitación pronosticada (mm)", "Blues", opacidad=0.7,
+             mostrar=False, umbral=1.0, gradual=True)
     # profundidad proyectada
     _overlay(mapa, ruta_outputs(cfg, f"profundidad_{sufijo}.tif"),
              "Anegamiento proyectado (profundidad m)", "YlGnBu", vmax=3.0,
