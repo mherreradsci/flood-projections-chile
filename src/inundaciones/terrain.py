@@ -51,6 +51,16 @@ def preparar_terreno(cfg: dict) -> dict[str, Path]:
 
     hand_arr = np.asarray(hand, dtype="float32")
     hand_arr[~np.isfinite(hand_arr)] = -9999
+
+    # océano y agua permanente no son "inundables": HAND nodata ahí.
+    # (el DEM tiene el mar en 0 m y HAND≈0, lo que anega la costa en falso)
+    dem_arr, _, _ = leer_raster(ruta_dem)
+    hand_arr[dem_arr < 0.5] = -9999
+    ruta_lc = ruta_data(cfg, "landcover", "worldcover.tif")
+    if ruta_lc.exists():
+        lc = leer_raster(ruta_lc)[0]
+        hand_arr[(lc == 80) | (lc == 0)] = -9999
+
     guardar_raster(ruta_hand, hand_arr, transform, nodata=-9999)
     guardar_raster(ruta_acc, np.asarray(acc, dtype="float32"), transform, nodata=-9999)
     guardar_raster(ruta_streams, streams.astype("uint8"), transform, nodata=255,
