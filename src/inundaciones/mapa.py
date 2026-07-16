@@ -60,16 +60,18 @@ def generar_mapa(cfg: dict, sufijo: str = "proyectada") -> Path:
     meta = json.loads(ruta_data(cfg, "forecast", "meta.json").read_text())
     o, s, e, n = cfg["region"]["bbox"]
     mapa = folium.Map(location=[(s + n) / 2, (o + e) / 2], zoom_start=8,
-                      tiles="cartodbpositron", control_scale=True)
+                      tiles=None, control_scale=True)
 
-    # base satelital alternativa (Esri World Imagery, gratuita con atribución);
-    # se elige desde el LayerControl, el fondo claro sigue siendo el defecto
+    # bases: satelital (Esri World Imagery, gratuita con atribución) por
+    # defecto; el fondo claro queda como alternativa en el LayerControl
     folium.TileLayer(
         tiles=("https://server.arcgisonline.com/ArcGIS/rest/services/"
                "World_Imagery/MapServer/tile/{z}/{y}/{x}"),
         attr="Esri, Maxar, Earthstar Geographics",
-        name="Satélite (Esri)", show=False,
+        name="Satélite (Esri)", show=True,
     ).add_to(mapa)
+    folium.TileLayer("cartodbpositron", name="Fondo claro (Carto)",
+                     show=False).add_to(mapa)
 
     # precipitación (alfa gradual: los núcleos intensos resaltan, el resto
     # deja ver el mapa base)
