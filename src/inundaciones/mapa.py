@@ -47,7 +47,11 @@ def _overlay(mapa, ruta, nombre, cmap, vmax=None, opacidad=0.65, mostrar=True,
     else:
         rgba[..., 3] = np.where(valores > umbral, opacidad, 0.0)
     folium.raster_layers.ImageOverlay(
+        # mercator_project: el raster viene en grilla geográfica regular
+        # (EPSG:4326) y sin esto Leaflet lo estira lineal en Mercator,
+        # desplazando el interior ~2.5 km al sur a la latitud de la región
         image=rgba, bounds=bounds, name=nombre, show=mostrar, zindex=2,
+        mercator_project=True,
     ).add_to(mapa)
     return vmax
 
