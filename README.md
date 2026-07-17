@@ -33,6 +33,11 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python scripts/04_proyectar.py --fuente gfs
 ```
 
+Utilitario: `scripts/ciclo_vigente.py` muestra qué ciclos GFS ya publicaron el
+horizonte completo (72 h) en NOAA — el más reciente de ellos es el que usará
+`--fuente gfs` — sin descargar datos (solo HEAD a los `.idx` del bucket
+`noaa-gfs-bdp-pds`).
+
 ### Parámetros de `04_proyectar.py`
 
 | Parámetro | Valores | Defecto | Descripción |

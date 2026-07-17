@@ -40,6 +40,54 @@ def _ultimo_ciclo_gfs() -> datetime:
     return ahora.replace(hour=hora_ciclo, minute=0, second=0, microsecond=0)
 
 
+# bucket público AWS Open Data con los GRIB operativos de GFS (mismo origen
+# que usa Herbie); el .idx es liviano y sirve como testigo de disponibilidad
+_URL_IDX_GFS = ("https://noaa-gfs-bdp-pds.s3.amazonaws.com/"
+                "gfs.{c:%Y%m%d}/{c:%H}/atmos/gfs.t{c:%H}z.pgrb2.0p25.f{fxx:03d}.idx")
+
+
+def sondear_ciclos_gfs(horas: int = 72, max_ciclos: int = 4) -> list[dict]:
+    """Reporta qué ciclos GFS recientes ya publicaron el horizonte requerido.
+
+    NOAA publica cada ciclo de forma progresiva (~1.5 h desde f000 hasta
+    f384), así que un ciclo puede existir en el servidor sin llegar aún a
+    f{horas}. "Vigente" para el pipeline = el más reciente que sí llegó.
+    Solo hace peticiones HEAD sobre los .idx; no descarga datos.
+
+    Devuelve, del más reciente al más antiguo, dicts con:
+      ciclo (datetime UTC), completo (bool), ultima_fxx (int | None si el
+      ciclo aún no aparece en el servidor).
+    """
+    import requests
+
+    def _existe(c: datetime, fxx: int) -> bool:
+        r = requests.head(_URL_IDX_GFS.format(c=c, fxx=fxx), timeout=15)
+        return r.status_code == 200
+
+    ahora = datetime.now(timezone.utc)
+    # +6 h sobre la heurística de rezago: interesa ver también el ciclo que
+    # todavía se está publicando
+    ciclo = _ultimo_ciclo_gfs() + timedelta(hours=6)
+    if ciclo > ahora:
+        ciclo -= timedelta(hours=6)
+
+    resultados = []
+    for i in range(max_ciclos):
+        c = ciclo - timedelta(hours=6 * i)
+        if _existe(c, horas):
+            resultados.append({"ciclo": c, "completo": True, "ultima_fxx": horas})
+        elif not _existe(c, 0):
+            resultados.append({"ciclo": c, "completo": False, "ultima_fxx": None})
+        else:
+            ultima = 0
+            for fxx in range(horas - 6, 0, -6):
+                if _existe(c, fxx):
+                    ultima = fxx
+                    break
+            resultados.append({"ciclo": c, "completo": False, "ultima_fxx": ultima})
+    return resultados
+
+
 def descargar_gfs(cfg: dict) -> tuple[Path, dict]:
     """Suma APCP 6-horario 0→N horas y estima la isoterma 0 media del evento.
 
