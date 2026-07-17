@@ -46,7 +46,7 @@ _URL_IDX_GFS = ("https://noaa-gfs-bdp-pds.s3.amazonaws.com/"
                 "gfs.{c:%Y%m%d}/{c:%H}/atmos/gfs.t{c:%H}z.pgrb2.0p25.f{fxx:03d}.idx")
 
 
-def sondear_ciclos_gfs(horas: int = 72, max_ciclos: int = 4) -> list[dict]:
+def sondear_ciclos_gfs(horas: int = 72, max_ciclos: int = 4):
     """Reporta qué ciclos GFS recientes ya publicaron el horizonte requerido.
 
     NOAA publica cada ciclo de forma progresiva (~1.5 h desde f000 hasta
@@ -54,9 +54,10 @@ def sondear_ciclos_gfs(horas: int = 72, max_ciclos: int = 4) -> list[dict]:
     f{horas}. "Vigente" para el pipeline = el más reciente que sí llegó.
     Solo hace peticiones HEAD sobre los .idx; no descarga datos.
 
-    Devuelve, del más reciente al más antiguo, dicts con:
+    Genera, del más reciente al más antiguo, dicts con:
       ciclo (datetime UTC), completo (bool), ultima_fxx (int | None si el
-      ciclo aún no aparece en el servidor).
+    ciclo aún no aparece en el servidor). Es un generador: quien solo busca
+    el primer ciclo completo puede cortar sin sondear los anteriores.
     """
     import requests
 
@@ -71,21 +72,34 @@ def sondear_ciclos_gfs(horas: int = 72, max_ciclos: int = 4) -> list[dict]:
     if ciclo > ahora:
         ciclo -= timedelta(hours=6)
 
-    resultados = []
     for i in range(max_ciclos):
         c = ciclo - timedelta(hours=6 * i)
         if _existe(c, horas):
-            resultados.append({"ciclo": c, "completo": True, "ultima_fxx": horas})
+            yield {"ciclo": c, "completo": True, "ultima_fxx": horas}
         elif not _existe(c, 0):
-            resultados.append({"ciclo": c, "completo": False, "ultima_fxx": None})
+            yield {"ciclo": c, "completo": False, "ultima_fxx": None}
         else:
             ultima = 0
             for fxx in range(horas - 6, 0, -6):
                 if _existe(c, fxx):
                     ultima = fxx
                     break
-            resultados.append({"ciclo": c, "completo": False, "ultima_fxx": ultima})
-    return resultados
+            yield {"ciclo": c, "completo": False, "ultima_fxx": ultima}
+
+
+def _ciclo_gfs_para_descarga(horas: int) -> datetime:
+    """Ciclo inicial de descarga: el más reciente confirmado completo en NOAA.
+
+    Si el sondeo falla (p. ej. sin red hacia S3), cae a la heurística de
+    rezago fijo; el bucle de reintentos de descargar_gfs cubre el resto.
+    """
+    try:
+        for r in sondear_ciclos_gfs(horas=horas):
+            if r["completo"]:
+                return r["ciclo"]
+    except Exception as exc:
+        log.warning("Sondeo de ciclos GFS falló (%s); uso heurística de rezago", exc)
+    return _ultimo_ciclo_gfs()
 
 
 def descargar_gfs(cfg: dict) -> tuple[Path, dict]:
@@ -98,7 +112,7 @@ def descargar_gfs(cfg: dict) -> tuple[Path, dict]:
 
     horas = int(cfg["pronostico"]["horas"])
     o, s, e, n = cfg["region"]["bbox"]
-    ciclo = _ultimo_ciclo_gfs()
+    ciclo = _ciclo_gfs_para_descarga(horas)
 
     precip_total = None
     isotermas = []
