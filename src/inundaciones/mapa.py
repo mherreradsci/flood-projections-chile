@@ -59,7 +59,10 @@ def _overlay(mapa, ruta, nombre, cmap, vmax=None, opacidad=0.65, mostrar=True,
 def generar_mapa(cfg: dict, sufijo: str = "proyectada") -> Path:
     meta = json.loads(ruta_data(cfg, "forecast", "meta.json").read_text())
     o, s, e, n = cfg["region"]["bbox"]
-    mapa = folium.Map(location=[(s + n) / 2, (o + e) / 2], zoom_start=8,
+    vista = cfg.get("mapa", {}).get("vista_inicial") or {}
+    centro = vista.get("centro", [(s + n) / 2, (o + e) / 2])
+    zoom = vista.get("zoom", 8)
+    mapa = folium.Map(location=centro, zoom_start=zoom,
                       tiles=None, control_scale=True)
 
     # bases: satelital (Esri World Imagery, gratuita con atribución) por
@@ -126,7 +129,7 @@ def generar_mapa(cfg: dict, sufijo: str = "proyectada") -> Path:
     ciclo_tag = ""
     if meta.get("ciclo"):
         ciclo_dt = datetime.fromisoformat(meta["ciclo"])
-        ciclo_tag = f"_{ciclo_dt:%H}utc"
+        ciclo_tag = f"_{ciclo_dt:%Y%m%d}_{ciclo_dt:%H}utc"
         fuente_txt = (f"Fuente lluvia: {meta['fuente'].upper()} "
                       f"(ciclo {ciclo_dt:%H} UTC) | acumulado máx "
                       f"{meta['precip_max_mm']} mm / {meta['horas']} h")

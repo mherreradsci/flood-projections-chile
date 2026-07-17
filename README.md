@@ -50,9 +50,10 @@ Ejemplos:
 ```
 
 Resultado principal:
-`outputs/mapa_anegamientos_<fuente>[_<HH>utc]_<AAAAMMDD-HHMMSS>.html`
-(folium, capas conmutables; el tag `_<HH>utc` aparece solo con pronósticos e
-indica el ciclo usado) más GeoTIFF/GeoJSON en `outputs/`, sufijados por fuente
+`outputs/mapa_anegamientos_<fuente>[_<AAAAMMDD>_<HH>utc]_<AAAAMMDD-HHMMSS>.html`
+(folium, capas conmutables; el tag `_<AAAAMMDD>_<HH>utc` aparece solo con
+pronósticos e indica día y ciclo usados, de modo que ordenar por nombre de
+archivo ordena por ciclo) más GeoTIFF/GeoJSON en `outputs/`, sufijados por fuente
 (`extension_gfs.tif`, `zonas_nuevas_extremo_200mm.geojson`, …).
 
 ## Datos usados (todos públicos)

@@ -12,6 +12,13 @@ rutas:
   data: data
   outputs: outputs
 
+mapa:
+  # Vista inicial del HTML [lat, lon] + zoom; comentar el bloque para volver
+  # al comportamiento por defecto (centro del bbox regional, zoom 8).
+  vista_inicial:
+    centro: [-29.945, -71.28]   # conurbación La Serena–Coquimbo
+    zoom: 12
+
 dem:
   # 90 m para la corrida regional completa; usar 30 para análisis por cuenca
   resolucion_m: 90
@@ -71,6 +78,10 @@ escenarios:
     precipitacion_mm: 100
     horas: 72
     isoterma0_m: 2800
+  costero_120mm:
+    precipitacion_mm: 120
+    horas: 72
+    isoterma0_m: 3000
 
 calibracion:
   # Único evento con huella MODIS observada sobre Coquimbo en el Global Flood
