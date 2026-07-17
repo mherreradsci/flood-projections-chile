@@ -137,15 +137,65 @@ def generar_mapa(cfg: dict, sufijo: str = "proyectada") -> Path:
         fuente_txt = (f"Escenario sintético: {meta['precip_max_mm']} mm / "
                       f"{meta['horas']} h uniformes (no depende de ciclo GFS)")
 
-    titulo = (f"<div style='position:fixed;top:10px;left:60px;z-index:1000;"
+    titulo = (f"<div id='titulo-mapa' style='position:fixed;top:10px;left:60px;"
+              f"z-index:1000;"
               f"background:rgba(255,255,255,.92);padding:8px 14px;border-radius:6px;"
               f"box-shadow:0 1px 4px rgba(0,0,0,.3);font-family:sans-serif'>"
-              f"<b>Proyección de anegamientos — Región de Coquimbo</b><br>"
+              f"<b>Proyección de anegamientos — Región de Coquimbo</b>"
+              f"<span id='titulo-flecha'> &#9660;</span>"
+              f"<span id='titulo-detalle'><br>"
               f"{fuente_txt} | isoterma 0: {meta['isoterma0_m']} m<br>"
               f"<span style='color:#666;font-size:0.85em'>generado: "
-              f"{generado:%d-%m-%Y %H:%M:%S}</span></div>")
+              f"{generado:%d-%m-%Y %H:%M:%S}</span></span></div>")
     mapa.get_root().html.add_child(folium.Element(titulo))
     folium.LayerControl(collapsed=False).add_to(mapa)
+
+    # En pantallas angostas (smartphone) la tarjeta de título y el selector de
+    # capas expandido tapan el mapa. Con collapsed=False Leaflet no instala los
+    # listeners de abrir/cerrar, así que se agrega un toggle propio: alternar la
+    # clase leaflet-control-layers-expanded reproduce el expandir/colapsar
+    # nativo. En desktop nada cambia (el media query no aplica).
+    responsive = """
+<style>
+#titulo-flecha { display: none; }
+@media (max-width: 767px) {
+  #titulo-mapa {
+    font-size: 0.72em !important;
+    max-width: 60vw;
+    padding: 5px 8px !important;
+  }
+  /* colapsada por defecto: solo el título; tap despliega los detalles */
+  #titulo-flecha { display: inline; font-size: 0.8em; color: #666; }
+  #titulo-mapa:not(.expandido) #titulo-detalle { display: none; }
+  #titulo-mapa.expandido #titulo-flecha { display: none; }
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (!window.matchMedia('(max-width: 767px)').matches) return;
+  var tit = document.getElementById('titulo-mapa');
+  tit.addEventListener('click', function () {
+    tit.classList.toggle('expandido');
+  });
+  var ctl = document.querySelector('.leaflet-control-layers');
+  if (!ctl) return;
+  ctl.classList.remove('leaflet-control-layers-expanded');
+  ctl.querySelector('.leaflet-control-layers-toggle')
+     .addEventListener('click', function (e) {
+        e.preventDefault();
+        ctl.classList.add('leaflet-control-layers-expanded');
+     });
+  // tocar fuera del control lo vuelve a colapsar (los clicks dentro del
+  // control no llegan aquí: Leaflet les corta la propagación)
+  document.addEventListener('click', function (e) {
+    if (!ctl.contains(e.target)) {
+      ctl.classList.remove('leaflet-control-layers-expanded');
+    }
+  });
+});
+</script>
+"""
+    mapa.get_root().html.add_child(folium.Element(responsive))
 
     destino = ruta_outputs(
         cfg, f"mapa_anegamientos_{sufijo}{ciclo_tag}_{generado:%Y%m%d-%H%M%S}.html")
