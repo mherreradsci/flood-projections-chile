@@ -131,7 +131,7 @@ def generar_mapa(cfg: dict, sufijo: str = "proyectada") -> Path:
         ciclo_dt = datetime.fromisoformat(meta["ciclo"])
         ciclo_tag = f"_{ciclo_dt:%Y%m%d}_{ciclo_dt:%H}utc"
         fuente_txt = (f"Fuente lluvia: {meta['fuente'].upper()} "
-                      f"(ciclo {ciclo_dt:%H} UTC) | acumulado máx "
+                      f"{ciclo_dt:%d-%m-%Y} (ciclo {ciclo_dt:%H} UTC) | acumulado máx "
                       f"{meta['precip_max_mm']} mm / {meta['horas']} h")
     else:
         fuente_txt = (f"Escenario sintético: {meta['precip_max_mm']} mm / "
