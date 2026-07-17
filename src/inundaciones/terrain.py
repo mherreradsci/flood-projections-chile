@@ -1,5 +1,35 @@
 """Hidrología de terreno con pysheds: flujo, red de drenaje y HAND.
 
+Cómo se calcula por dónde correría el agua
+------------------------------------------
+El cálculo opera celda a celda sobre el DEM (modelo digital de elevación,
+~30 m por celda) bajo un principio único: el agua se mueve hacia la celda
+vecina más baja. La cadena tiene cinco pasos:
+
+1. Acondicionar el DEM (``fill_pits``, ``fill_depressions``,
+   ``resolve_flats``): el DEM crudo trae hoyos falsos y zonas planas donde
+   el flujo quedaría atrapado por errores de medición; se rellenan y se les
+   impone una pendiente mínima para que todo el terreno drene hacia alguna
+   salida.
+2. Dirección de flujo (``flowdir``, método D8): para cada celda se miran
+   sus 8 vecinas y se anota hacia cuál bajaría el agua. El resultado es un
+   campo de direcciones — cada celda apunta cuesta abajo.
+3. Acumulación (``accumulation``): siguiendo esas direcciones se cuenta
+   cuántas celdas aguas arriba desembocan en cada celda. Una cumbre vale 1
+   (solo su propia lluvia); el fondo de una quebrada puede recibir millones.
+4. Red de drenaje: donde la acumulación supera el umbral
+   ``terreno.umbral_drenaje_km2`` (config.yaml) se declara cauce. Eso
+   dibuja ríos y quebradas, incluidos los secos casi todo el año.
+5. HAND (``compute_hand``): para cada celda se sigue su dirección de flujo
+   hasta el cauce más cercano y se calcula cuántos metros más arriba está
+   la celda respecto de ese cauce. Es la variable clave del modelo: si la
+   crecida sube N metros, se anegan las celdas con HAND < N. Nótese que no
+   es altura sobre el mar sino sobre el cauce al que se drena — una terraza
+   a 800 msnm junto a un río puede ser más riesgosa que un cerro a 200 msnm.
+
+El paso es el más lento del pipeline y por eso se cachea por existencia de
+archivo: cambiar el umbral de drenaje exige borrar data/dem/hand.tif.
+
 Salidas cacheadas en data/dem/:
   acc.tif    — acumulación de flujo (nº de celdas aguas arriba)
   streams.tif— máscara de red de drenaje (uint8)

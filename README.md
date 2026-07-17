@@ -12,6 +12,17 @@ zonas nuevas de anegamiento en rojo y servicios críticos expuestos.*
 
 ## Método
 
+Dos conceptos base:
+
+- **DEM** (*Digital Elevation Model*, modelo digital de elevación): raster
+  donde cada celda (~30 m aquí) guarda la altura del terreno sobre el nivel
+  del mar. Es el "mapa en 3D" del que se deriva todo lo demás.
+- **HAND** (*Height Above Nearest Drainage*): cuántos metros más arriba está
+  cada celda respecto del **cauce al que drena** siguiendo la dirección del
+  flujo — no de la altura sobre el mar. Si una crecida sube N metros, se
+  anegan las celdas con HAND < N; por eso una terraza baja junto a un río
+  puede ser más riesgosa que un cerro costero.
+
 Modelo semi-hidrológico **HAND calibrado**:
 
 1. **Terreno**: DEM Copernicus GLO-30 → direcciones de flujo, acumulación, red
