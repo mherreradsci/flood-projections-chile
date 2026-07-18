@@ -1,0 +1,134 @@
+# Configuración del sistema de proyección de anegamientos — Región de Atacama
+#
+# Uso: correr cada script con --config config_atacama.yaml
+#   .venv/bin/python scripts/01_descargar_datos.py --config config_atacama.yaml
+# Con region.id definido, los insumos y salidas viven en data/atacama/ y
+# outputs/atacama/, sin tocar el layout de Coquimbo.
+#
+# PENDIENTE antes de confiar en las proyecciones: verificar las huellas de
+# calibración (ver calibracion.eventos) y afinar precipitacion_mm/isoterma0_m
+# de cada evento con registros DMC/DGA o CR2MET.
+
+proyecto:
+  nombre: anegamientos-atacama
+
+region:
+  nombre: "Región de Atacama"
+  osm_geocode: "Región de Atacama, Chile"
+  id: atacama
+  # bbox de respaldo/recorte [oeste, sur, este, norte] (EPSG:4326)
+  bbox: [-71.8, -29.6, -68.0, -25.0]
+
+rutas:
+  data: data
+  outputs: outputs
+
+mapa:
+  vista_inicial:
+    centro: [-27.37, -70.33]   # Copiapó
+    zoom: 12
+
+dem:
+  # 90 m para la corrida regional completa; usar 30 para análisis por cuenca
+  resolucion_m: 90
+
+terreno:
+  # área de acumulación mínima (km²) para que una celda se considere cauce
+  umbral_drenaje_km2: 15
+  # HAND máximo considerado inundable (m sobre el drenaje más cercano)
+  hand_max_m: 15
+
+subcuencas:
+  hydrobasins_nivel: 8
+
+modelo:
+  # Curve Number por clase ESA WorldCover (condición AMC II, suelos
+  # hidrológicos tipo C-D: en el desierto de Atacama dominan suelos poco
+  # permeables con costras y escasa vegetación, algo más escurridores que en
+  # Coquimbo). La calibración ajusta un factor de volumen por subcuenca, por
+  # lo que estos valores son el punto de partida, no el resultado final.
+  cn_por_worldcover:
+    10: 72    # bosque
+    20: 79    # matorral
+    30: 81    # pastizal
+    40: 82    # cultivos
+    50: 92    # urbano / construido
+    60: 88    # suelo desnudo / vegetación escasa (clase dominante en Atacama)
+    70: 98    # nieve y hielo
+    80: 100   # agua permanente
+    90: 85    # humedal herbáceo
+    95: 85    # manglar
+    100: 80   # musgo y liquen
+  cn_defecto: 86
+  # banda bajo la isoterma 0 donde la nieve húmeda no genera escorrentía líquida plena
+  banda_nieve_humeda_m: 300
+  factor_volumen_defecto: 1.0
+
+pronostico:
+  modelo: gfs        # gfs | ifs (ECMWF open-data 0.25°)
+  producto: pgrb2.0p25
+  horas: 72          # horizonte de acumulación (h)
+  # si el GRIB no trae altura de isoterma 0 utilizable, respaldo:
+  isoterma0_defecto_m: 3800
+
+sentinel1:
+  # openEO en Copernicus Dataspace (cuenta gratuita: dataspace.copernicus.eu)
+  backend: "openeo.dataspace.copernicus.eu"
+  coleccion: SENTINEL1_GRD
+  resolucion_m: 90        # resolución de proceso server-side
+  umbral_db: -18.0        # sigma0 VV bajo esto = agua
+  hand_max_filtro_m: 30   # descarta detecciones altas sobre el drenaje (sombra radar)
+
+# En Atacama los acumulados extremos son menores que en Coquimbo pero caen
+# sobre suelo hiperárido con isoterma alta (tormentas cálidas): 100 mm / 72 h
+# es del orden del aluvión de marzo 2015. Ajustar con IDF locales si se
+# dispone de ellas.
+escenarios:
+  extremo_100mm:
+    precipitacion_mm: 100
+    horas: 72
+    isoterma0_m: 4500
+  moderado_50mm:
+    precipitacion_mm: 50
+    horas: 72
+    isoterma0_m: 3800
+  costero_70mm:
+    precipitacion_mm: 70
+    horas: 72
+    isoterma0_m: 4200
+
+calibracion:
+  # Eventos candidatos — REQUIEREN VERIFICACIÓN antes de calibrar:
+  # - marzo_2015 (aluvión de Copiapó/Chañaral, 24-26 mar): por magnitud
+  #   debería estar en el Global Flood Database, pero la cobertura de GFD es
+  #   irregular (para Coquimbo 2015/2017 no existen). Si GFD no lo trae,
+  #   cambiar fuente a sentinel1 (S1A ya operaba; cobertura de marzo 2015
+  #   sobre Chile es rala — revisar pasadas disponibles en la ventana).
+  # - mayo_2017 (sistema frontal 11-13 may, afectó también el Huasco y
+  #   Copiapó): fuente sentinel1, misma receta que en Coquimbo.
+  # precipitacion_mm e isoterma0_m son estimaciones gruesas de partida;
+  # afinar con registros DMC/DGA (Copiapó, Chañaral, Vallenar) o CR2MET.
+  eventos:
+    - nombre: marzo_2015
+      fuente: gfd
+      inicio: "2015-03-24"
+      fin: "2015-03-29"
+      precipitacion_mm: 80
+      isoterma0_m: 4300
+    - nombre: mayo_2017
+      fuente: sentinel1
+      inicio: "2017-05-11"
+      fin: "2017-05-20"
+      precipitacion_mm: 60
+      isoterma0_m: 3000
+  # rango de búsqueda del factor de volumen por subcuenca
+  factor_min: 0.05
+  factor_max: 8.0
+  csi_objetivo: 0.3
+
+exposicion:
+  # consultas OSM sobre las zonas proyectadas
+  vias: ["motorway", "trunk", "primary", "secondary", "tertiary", "residential"]
+  servicios: ["hospital", "clinic", "school", "fire_station", "police"]
+  # overpass-api.de banea tras consultas masivas; usar espejo por defecto
+  overpass_endpoint: "https://overpass.kumi.systems/api"
