@@ -19,6 +19,7 @@ from inundaciones.exposure import evaluar_exposicion
 from inundaciones.flood_model import modelar_inundacion
 from inundaciones.mapa import generar_mapa
 from inundaciones.new_areas import identificar_zonas_nuevas
+from inundaciones.publicar import publicar_mapa
 from inundaciones.runoff import calcular_escorrentia
 from inundaciones.utils import cargar_config, log
 
@@ -52,6 +53,7 @@ def main():
         except Exception as exc:
             log.warning("Exposición OSM falló (%s); el mapa se genera sin ella", exc)
     mapa = generar_mapa(cfg, sufijo=sufijo)
+    publicar_mapa(cfg, mapa, sufijo)
     log.info("Listo. Extensión proyectada: %.1f km². Abrir: %s",
              resultado["area_km2"], mapa)
 

@@ -17,6 +17,9 @@ region:
 rutas:
   data: data
   outputs: outputs
+  # copia estable por región (mapa_<sufijo>.html + manifest.json) que consume
+  # el servicio de publicación externo (carrusel por región)
+  publicacion: publicacion
 
 mapa:
   # Vista inicial del HTML [lat, lon] + zoom; comentar el bloque para volver
