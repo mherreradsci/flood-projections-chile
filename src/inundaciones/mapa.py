@@ -15,6 +15,7 @@ import numpy as np
 import rasterio
 from rasterio.warp import Resampling
 
+from . import ingest_forecast
 from .utils import cargar_config, leer_raster, log, ruta_data, ruta_outputs
 
 MAX_PIXELES_OVERLAY = 1600  # lado mayor de los PNG embebidos en el HTML
@@ -56,8 +57,12 @@ def _overlay(mapa, ruta, nombre, cmap, vmax=None, opacidad=0.65, mostrar=True,
     return vmax
 
 
-def generar_mapa(cfg: dict, sufijo: str = "proyectada") -> Path:
-    meta = json.loads(ruta_data(cfg, "forecast", "meta.json").read_text())
+def generar_mapa(cfg: dict, sufijo: str | None = None) -> Path:
+    """Mapa HTML de la corrida `sufijo` (gfs, ifs o nombre de escenario;
+    sin sufijo, pronostico.modelo). Etiqueta, capa de lluvia y rasters de
+    resultado provienen todos del mismo sufijo — no se mezclan fuentes."""
+    sufijo = sufijo or cfg["pronostico"]["modelo"]
+    meta = json.loads(ingest_forecast.ruta_meta(cfg, sufijo).read_text())
     o, s, e, n = cfg["region"]["bbox"]
     vista = cfg.get("mapa", {}).get("vista_inicial") or {}
     centro = vista.get("centro", [(s + n) / 2, (o + e) / 2])
@@ -78,7 +83,7 @@ def generar_mapa(cfg: dict, sufijo: str = "proyectada") -> Path:
 
     # precipitación (alfa gradual: los núcleos intensos resaltan, el resto
     # deja ver el mapa base)
-    _overlay(mapa, ruta_data(cfg, "forecast", "precip_mm.tif"),
+    _overlay(mapa, ingest_forecast.ruta_precip(cfg, sufijo),
              "Precipitación pronosticada (mm)", "Blues", opacidad=0.7,
              mostrar=False, umbral=1.0, gradual=True)
     # profundidad proyectada

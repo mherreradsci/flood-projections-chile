@@ -1,8 +1,11 @@
 """Pronóstico de precipitación e isoterma 0: GFS 0.25° vía Herbie, o escenario sintético.
 
-Salidas (siempre en la grilla del DEM):
-  data/forecast/precip_mm.tif   — precipitación acumulada del evento (mm)
-  data/forecast/meta.json       — fuente, ciclo, horizonte, isoterma 0 (m)
+Salidas (siempre en la grilla del DEM, un par por fuente):
+  data/forecast/precip_mm_<sufijo>.tif — precipitación acumulada del evento (mm)
+  data/forecast/meta_<sufijo>.json     — fuente, ciclo, horizonte, isoterma 0 (m)
+
+<sufijo> es gfs, ifs o el nombre del escenario — el mismo contrato por sufijo
+de outputs/, para que las corridas de distintas fuentes no se pisen entre sí.
 """
 
 import json
@@ -14,6 +17,16 @@ import rasterio
 from rasterio.warp import Resampling, reproject
 
 from .utils import cargar_config, guardar_raster, leer_raster, log, ruta_data
+
+
+def ruta_precip(cfg: dict, sufijo: str) -> Path:
+    """Raster de precipitación de la fuente `sufijo` (gfs, ifs o escenario)."""
+    return ruta_data(cfg, "forecast", f"precip_mm_{sufijo}.tif")
+
+
+def ruta_meta(cfg: dict, sufijo: str) -> Path:
+    """Metadatos (fuente, ciclo, isoterma 0) de la fuente `sufijo`."""
+    return ruta_data(cfg, "forecast", f"meta_{sufijo}.json")
 
 
 def _grilla_dem(cfg: dict):
@@ -164,7 +177,7 @@ def descargar_gfs(cfg: dict) -> tuple[Path, dict]:
     isoterma = float(np.mean(isotermas)) if isotermas else cfg["pronostico"]["isoterma0_defecto_m"]
     precip_dem = _a_grilla_dem(cfg, precip_total, transform, crs)
 
-    destino = ruta_data(cfg, "forecast", "precip_mm.tif")
+    destino = ruta_precip(cfg, "gfs")
     guardar_raster(destino, precip_dem, _grilla_dem(cfg)[1], nodata=-9999)
     meta = {
         "fuente": "gfs",
@@ -174,7 +187,7 @@ def descargar_gfs(cfg: dict) -> tuple[Path, dict]:
         "precip_max_mm": round(float(np.nanmax(precip_dem)), 1),
         "precip_media_mm": round(float(np.nanmean(precip_dem)), 1),
     }
-    ruta_data(cfg, "forecast", "meta.json").write_text(json.dumps(meta, indent=2))
+    ruta_meta(cfg, "gfs").write_text(json.dumps(meta, indent=2))
     log.info("GFS %s: máx %.0f mm / media %.0f mm en %d h, isoterma 0 ≈ %d m",
              meta["ciclo"], meta["precip_max_mm"], meta["precip_media_mm"],
              horas, meta["isoterma0_m"])
@@ -241,7 +254,7 @@ def descargar_ifs(cfg: dict) -> tuple[Path, dict]:
         log.warning("Isoterma IFS no disponible (%s); uso %d m", exc, isoterma)
 
     precip_dem = _a_grilla_dem(cfg, precip, transform, "EPSG:4326")
-    destino = ruta_data(cfg, "forecast", "precip_mm.tif")
+    destino = ruta_precip(cfg, "ifs")
     guardar_raster(destino, precip_dem, _grilla_dem(cfg)[1], nodata=-9999)
     meta = {
         "fuente": "ifs",
@@ -251,7 +264,7 @@ def descargar_ifs(cfg: dict) -> tuple[Path, dict]:
         "precip_max_mm": round(float(np.nanmax(precip_dem)), 1),
         "precip_media_mm": round(float(np.nanmean(precip_dem)), 1),
     }
-    ruta_data(cfg, "forecast", "meta.json").write_text(json.dumps(meta, indent=2))
+    ruta_meta(cfg, "ifs").write_text(json.dumps(meta, indent=2))
     log.info("IFS %s: máx %.0f mm / media %.0f mm en %d h, isoterma 0 ≈ %d m",
              meta["ciclo"], meta["precip_max_mm"], meta["precip_media_mm"],
              horas, meta["isoterma0_m"])
@@ -270,7 +283,7 @@ def generar_escenario(cfg: dict, nombre: str) -> tuple[Path, dict]:
     esc = cfg["escenarios"][nombre]
     forma, transform, _ = _grilla_dem(cfg)
     campo = np.full(forma, float(esc["precipitacion_mm"]), dtype="float32")
-    destino = ruta_data(cfg, "forecast", "precip_mm.tif")
+    destino = ruta_precip(cfg, nombre)
     guardar_raster(destino, campo, transform, nodata=-9999)
     meta = {
         "fuente": f"escenario:{nombre}",
@@ -280,7 +293,7 @@ def generar_escenario(cfg: dict, nombre: str) -> tuple[Path, dict]:
         "precip_max_mm": esc["precipitacion_mm"],
         "precip_media_mm": esc["precipitacion_mm"],
     }
-    ruta_data(cfg, "forecast", "meta.json").write_text(json.dumps(meta, indent=2))
+    ruta_meta(cfg, nombre).write_text(json.dumps(meta, indent=2))
     log.info("Escenario '%s': %s mm / %s h, isoterma 0 = %s m",
              nombre, esc["precipitacion_mm"], esc["horas"], esc["isoterma0_m"])
     return destino, meta

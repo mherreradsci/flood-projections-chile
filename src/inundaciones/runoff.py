@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from rasterio import features
 
+from . import ingest_forecast
 from .aoi import obtener_subcuencas
 from .utils import (area_celda_m2, cargar_config, guardar_raster, leer_raster,
                     log, ruta_data)
@@ -34,24 +35,27 @@ def rasterizar_subcuencas(cfg: dict) -> Path:
 
 def calcular_escorrentia(cfg: dict, factores: dict[str, float] | None = None,
                          precip_mm: float | None = None,
-                         isoterma_m: float | None = None) -> pd.DataFrame:
+                         isoterma_m: float | None = None,
+                         sufijo: str | None = None) -> pd.DataFrame:
     """Volumen de escorrentía (m³) por subcuenca.
 
-    Por defecto usa la lluvia vigente (data/forecast). `precip_mm` e
-    `isoterma_m` permiten forzar un evento (calibración, sensibilidad).
-    `factores`: factor de volumen calibrado por HYBAS_ID (str); sin calibrar
-    se usa modelo.factor_volumen_defecto.
+    Por defecto usa la lluvia de la fuente `sufijo` (gfs, ifs o escenario;
+    sin sufijo, el modelo de pronostico.modelo). `precip_mm` e `isoterma_m`
+    permiten forzar un evento (calibración, sensibilidad) sin leer
+    data/forecast. `factores`: factor de volumen calibrado por HYBAS_ID
+    (str); sin calibrar se usa modelo.factor_volumen_defecto.
     """
     sub = obtener_subcuencas(cfg)
     dem, transform, _ = leer_raster(ruta_data(cfg, "dem", "dem.tif"))
     cn, _, _ = leer_raster(ruta_data(cfg, "landcover", "curve_number.tif"))
     ids, _, _ = leer_raster(rasterizar_subcuencas(cfg))
+    sufijo = sufijo or cfg["pronostico"]["modelo"]
     if precip_mm is None:
-        precip, _, _ = leer_raster(ruta_data(cfg, "forecast", "precip_mm.tif"))
+        precip, _, _ = leer_raster(ingest_forecast.ruta_precip(cfg, sufijo))
     else:
         precip = np.full(dem.shape, float(precip_mm), dtype="float32")
     if isoterma_m is None:
-        meta = json.loads(ruta_data(cfg, "forecast", "meta.json").read_text())
+        meta = json.loads(ingest_forecast.ruta_meta(cfg, sufijo).read_text())
         isoterma_m = meta["isoterma0_m"]
 
     lat_media = (cfg["region"]["bbox"][1] + cfg["region"]["bbox"][3]) / 2

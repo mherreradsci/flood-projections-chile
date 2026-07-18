@@ -43,7 +43,7 @@ def main():
         sufijo = args.escenario
 
     factores = cargar_factores(cfg)
-    volumenes = calcular_escorrentia(cfg, factores=factores)
+    volumenes = calcular_escorrentia(cfg, factores=factores, sufijo=sufijo)
     resultado = modelar_inundacion(cfg, volumenes, sufijo=sufijo)
     identificar_zonas_nuevas(cfg, sufijo=sufijo)
     if not args.sin_exposicion:
