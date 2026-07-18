@@ -116,22 +116,58 @@ def descargar_backscatter(cfg: dict, evento: dict, conn=None) -> Path | None:
     return destino
 
 
+def _db_en_grilla(cfg: dict, nombre: str, forma, transform_dem, crs_dem):
+    """Backscatter mínimo del evento reproyectado a la grilla del DEM."""
+    bruto = ruta_data(cfg, "historical", f"s1_min_vv_{nombre}.tif")
+    if not bruto.exists():
+        return None
+    with rasterio.open(bruto) as src:
+        db = np.full(forma, np.nan, dtype="float32")
+        reproject(rasterio.band(src, 1), db,
+                  dst_transform=transform_dem, dst_crs=crs_dem,
+                  resampling=Resampling.average,
+                  dst_nodata=np.nan)
+    return db
+
+
+def _oscuro_permanente(cfg: dict, evento: dict, forma, transform_dem,
+                       crs_dem) -> np.ndarray | None:
+    """Celdas oscuras en TODOS los demás eventos S1 con dato: superficie lisa
+    permanente al radar (salares, arenales), no inundación.
+
+    La inundación de un evento no persiste en los otros (años de distancia),
+    así que "oscuro siempre" delata el falso positivo clásico del umbral dB
+    en desierto. Solo se descarta donde algún otro evento tiene dato válido;
+    sin evidencia no se asume permanencia.
+    """
+    umbral = float(cfg["sentinel1"]["umbral_db"])
+    otros = [e for e in cfg["calibracion"]["eventos"]
+             if e.get("fuente") == "sentinel1" and e["nombre"] != evento["nombre"]]
+    visto = confirmado = None
+    for ev in otros:
+        db = _db_en_grilla(cfg, ev["nombre"], forma, transform_dem, crs_dem)
+        if db is None:
+            continue
+        valido = np.isfinite(db)
+        no_contradice = (db < umbral) | ~valido
+        visto = valido if visto is None else (visto | valido)
+        confirmado = no_contradice if confirmado is None \
+            else (confirmado & no_contradice)
+    if visto is None:
+        return None
+    return visto & confirmado
+
+
 def derivar_mascara(cfg: dict, evento: dict) -> Path | None:
     """Umbral dB + depuración → huella_<evento>.tif en la grilla del DEM."""
     destino = ruta_data(cfg, "historical", f"huella_{evento['nombre']}.tif")
     if destino.exists():
         return destino
-    bruto = ruta_data(cfg, "historical", f"s1_min_vv_{evento['nombre']}.tif")
-    if not bruto.exists():
-        return None
 
     dem, transform_dem, crs_dem = leer_raster(ruta_data(cfg, "dem", "dem.tif"))
-    with rasterio.open(bruto) as src:
-        db = np.full(dem.shape, np.nan, dtype="float32")
-        reproject(rasterio.band(src, 1), db,
-                  dst_transform=transform_dem, dst_crs=crs_dem,
-                  resampling=Resampling.average,
-                  dst_nodata=np.nan)
+    db = _db_en_grilla(cfg, evento["nombre"], dem.shape, transform_dem, crs_dem)
+    if db is None:
+        return None
 
     validas = int(np.isfinite(db).sum())
     if validas == 0:
@@ -149,6 +185,13 @@ def derivar_mascara(cfg: dict, evento: dict) -> Path | None:
     if ruta_hand.exists():
         hand = leer_raster(ruta_hand)[0]
         agua &= (hand >= 0) & (hand < cfg["sentinel1"]["hand_max_filtro_m"])
+    if cfg["sentinel1"].get("filtrar_oscuro_permanente"):
+        perm = _oscuro_permanente(cfg, evento, dem.shape, transform_dem, crs_dem)
+        if perm is not None:
+            antes = int(agua.sum())
+            agua &= ~perm
+            log.info("Filtro oscuro permanente %s: %d celdas descartadas",
+                     evento["nombre"], antes - int(agua.sum()))
 
     if agua.sum() == 0:
         log.warning("Máscara %s vacía tras depurar; revisar umbral_db",

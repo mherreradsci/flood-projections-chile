@@ -77,6 +77,10 @@ sentinel1:
   resolucion_m: 90        # resolución de proceso server-side
   umbral_db: -18.0        # sigma0 VV bajo esto = agua
   hand_max_filtro_m: 30   # descarta detecciones altas sobre el drenaje (sombra radar)
+  # filtrar_oscuro_permanente: descarta celdas oscuras en todos los eventos S1
+  # (superficie lisa permanente, p. ej. salares). Activo en Atacama; en
+  # Coquimbo queda apagado para no alterar las huellas ya calibradas.
+  filtrar_oscuro_permanente: false
 
 escenarios:
   extremo_200mm:

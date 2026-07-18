@@ -43,4 +43,5 @@ PYTHONPATH=src .venv/bin/python -c "from inundaciones.utils import cargar_config
 - Subcuencas sin observación suficiente heredan la mediana regional de los factores — la ausencia de detección MODIS no implica ausencia de inundación.
 - El modelo sobrepredice extensión a propósito: es un producto de susceptibilidad, no un mapa de certeza.
 - Sentinel-1 (`ingest_sentinel1.py`) requiere cuenta gratuita en dataspace.copernicus.eu; la autenticación OIDC es interactiva la primera vez y openeo cachea el refresh token.
+- `sentinel1.filtrar_oscuro_permanente` descarta celdas oscuras en todos los eventos S1 (salares y arenales lisos al radar). Sin él, en Atacama la mitad del "agua" es salar y los factores de calibración saturan en factor_max. Activo en Atacama, apagado en Coquimbo (huellas ya calibradas).
 - La exposición OSM usa el espejo `overpass.kumi.systems` (overpass-api.de banea consultas masivas) y es tolerante a fallos: si Overpass falla, el mapa se genera sin esa capa.

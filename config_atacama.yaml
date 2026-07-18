@@ -82,6 +82,10 @@ sentinel1:
   resolucion_m: 90        # resolución de proceso server-side
   umbral_db: -18.0        # sigma0 VV bajo esto = agua
   hand_max_filtro_m: 30   # descarta detecciones altas sobre el drenaje (sombra radar)
+  # descarta celdas oscuras en TODOS los eventos S1 (salares/arenales lisos al
+  # radar, no inundación): imprescindible en Atacama, donde el 51-64% del
+  # "agua" a -18 dB es superficie oscura permanente (medido jul-2026)
+  filtrar_oscuro_permanente: true
 
 # En Atacama los acumulados extremos son menores que en Coquimbo pero caen
 # sobre suelo hiperárido con isoterma alta (tormentas cálidas): 100 mm / 72 h
