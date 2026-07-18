@@ -21,9 +21,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sin-pronostico", action="store_true",
                         help="omite la descarga GFS (útil si se usará un escenario)")
+    parser.add_argument("--config", default=None,
+                        help="config alternativo por región (p. ej. config_atacama.yaml)")
     args = parser.parse_args()
 
-    cfg = cargar_config()
+    cfg = cargar_config(args.config)
     aoi.obtener_region(cfg)
     aoi.obtener_subcuencas(cfg)
     ingest_dem.preparar_dem(cfg)

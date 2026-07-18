@@ -24,20 +24,26 @@ def cargar_config(ruta: str | Path | None = None) -> dict:
         return yaml.safe_load(f)
 
 
-def ruta_data(cfg: dict, *partes: str) -> Path:
-    p = RAIZ / cfg["rutas"]["data"]
+def _ruta_base(cfg: dict, clave: str, *partes: str) -> Path:
+    """Ruta bajo data/ u outputs/; con region.id definido agrega una
+    subcarpeta por región (multi-región). Sin id se mantiene el layout
+    plano histórico."""
+    p = RAIZ / cfg["rutas"][clave]
+    region_id = cfg.get("region", {}).get("id")
+    if region_id:
+        p = p / region_id
     for parte in partes:
         p = p / parte
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
+
+
+def ruta_data(cfg: dict, *partes: str) -> Path:
+    return _ruta_base(cfg, "data", *partes)
 
 
 def ruta_outputs(cfg: dict, *partes: str) -> Path:
-    p = RAIZ / cfg["rutas"]["outputs"]
-    for parte in partes:
-        p = p / parte
-    p.parent.mkdir(parents=True, exist_ok=True)
-    return p
+    return _ruta_base(cfg, "outputs", *partes)
 
 
 def guardar_raster(ruta: Path, datos: np.ndarray, transform: Affine, crs="EPSG:4326",

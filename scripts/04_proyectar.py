@@ -30,9 +30,11 @@ def main():
                         help="nombre del escenario en config.yaml")
     parser.add_argument("--sin-exposicion", action="store_true",
                         help="omite la consulta OSM de infraestructura expuesta")
+    parser.add_argument("--config", default=None,
+                        help="config alternativo por región (p. ej. config_atacama.yaml)")
     args = parser.parse_args()
 
-    cfg = cargar_config()
+    cfg = cargar_config(args.config)
     if args.fuente in ("gfs", "ifs"):
         ingest_forecast.descargar_pronostico(cfg, modelo=args.fuente)
         sufijo = args.fuente

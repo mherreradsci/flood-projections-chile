@@ -5,6 +5,14 @@ proyecto:
 region:
   nombre: "Región de Coquimbo"
   osm_geocode: "Región de Coquimbo, Chile"
+  # id (opcional): subcarpeta por región dentro de data/ y outputs/, para que
+  # varias regiones convivan en el mismo checkout. Para una región nueva:
+  # copiar este archivo (p. ej. config_atacama.yaml), definir id, nombre,
+  # osm_geocode y bbox, redefinir calibracion.eventos con huellas locales, y
+  # correr los scripts con --config config_atacama.yaml.
+  # Coquimbo queda sin id mientras el cron use el layout plano histórico
+  # (activarlo obliga a mover data/* y outputs/* a data/<id>/ y outputs/<id>/).
+  # id: coquimbo
   # bbox de respaldo/recorte [oeste, sur, este, norte] (EPSG:4326)
   bbox: [-72.0, -32.5, -69.75, -28.9]
 

@@ -1,4 +1,4 @@
-"""Área de interés: límite de la Región de Coquimbo y subcuencas HydroBASINS."""
+"""Área de interés: límite regional (OSM o bbox de config) y subcuencas HydroBASINS."""
 
 from pathlib import Path
 

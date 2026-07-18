@@ -141,7 +141,7 @@ def generar_mapa(cfg: dict, sufijo: str = "proyectada") -> Path:
               f"z-index:1000;"
               f"background:rgba(255,255,255,.92);padding:8px 14px;border-radius:6px;"
               f"box-shadow:0 1px 4px rgba(0,0,0,.3);font-family:sans-serif'>"
-              f"<b>Proyección de anegamientos — Región de Coquimbo</b>"
+              f"<b>Proyección de anegamientos — {cfg['region']['nombre']}</b>"
               f"<span id='titulo-flecha'> &#9660;</span>"
               f"<span id='titulo-detalle'><br>"
               f"{fuente_txt} | isoterma 0: {meta['isoterma0_m']} m<br>"
