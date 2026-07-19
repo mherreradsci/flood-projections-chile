@@ -27,6 +27,10 @@ def _configurar_osmnx(cfg: dict):
         "overpass_endpoint", "https://overpass.kumi.systems/api")
     ox.settings.overpass_rate_limit = False
     ox.settings.requests_timeout = TIMEOUT_S
+    # Bboxes regionales (~200.000 km²) superan el límite por defecto (2.500 km²)
+    # y osmnx los parte en decenas de sub-consultas; el espejo kumi tolera la
+    # consulta de amenities completa en una sola pasada.
+    ox.settings.max_query_area_size = 25e10
     return ox
 
 
