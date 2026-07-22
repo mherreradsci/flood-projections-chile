@@ -18,6 +18,18 @@ from .aoi import obtener_subcuencas
 from .utils import area_celda_m2, cargar_config, guardar_raster, leer_raster, log, ruta_data
 
 
+def _escorrentia_mm(P: float, CN: float) -> float:
+    """Escorrentía directa (mm) por el método SCS Curve Number.
+
+    S es la retención potencial máxima del suelo; Ia = 0.2*S es la
+    abstracción inicial (intercepción, encharcamiento) que no genera
+    escorrentía. Por debajo de Ia toda la lluvia se pierde y Q = 0.
+    """
+    S = 25400.0 / CN - 254.0
+    Ia = 0.2 * S
+    return (P - Ia) ** 2 / (P + 0.8 * S) if P > Ia else 0.0
+
+
 def rasterizar_subcuencas(cfg: dict) -> Path:
     """Raster de ids de subcuenca (1..N) en la grilla del DEM; 0 = fuera."""
     destino = ruta_data(cfg, "vector", "subcuencas_id.tif")
@@ -79,9 +91,7 @@ def calcular_escorrentia(cfg: dict, factores: dict[str, float] | None = None,
 
         P = float(np.nanmean(precip[pluvial]))
         CN = float(np.nanmean(cn[pluvial]))
-        S = 25400.0 / CN - 254.0          # retención potencial (mm)
-        Ia = 0.2 * S                       # abstracción inicial
-        Q = (P - Ia) ** 2 / (P + 0.8 * S) if P > Ia else 0.0
+        Q = _escorrentia_mm(P, CN)
         factor = float(factores.get(str(fila.HYBAS_ID), factor_defecto))
         volumen = Q / 1000.0 * n_pluvial * celda_m2 * factor
 

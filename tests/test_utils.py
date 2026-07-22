@@ -1,7 +1,7 @@
 import pytest
 from rasterio.transform import Affine
 
-from inundaciones.utils import area_celda_m2
+from inundaciones.utils import area_celda_m2, ruta_data, ruta_outputs
 
 
 def test_area_celda_en_el_ecuador():
@@ -35,3 +35,23 @@ def test_area_celda_distingue_ancho_de_alto():
     area = area_celda_m2(transform, lat_media=0.0)
     esperado = (0.02 * 111_320) * (0.01 * 110_540)
     assert area == pytest.approx(esperado, rel=1e-9)
+
+
+def test_ruta_data_sin_region_usa_layout_plano(tmp_path):
+    cfg = {"rutas": {"data": str(tmp_path / "data")}}
+    ruta = ruta_data(cfg, "dem", "dem.tif")
+    assert ruta == tmp_path / "data" / "dem" / "dem.tif"
+    assert ruta.parent.exists()  # se crea el directorio contenedor
+
+
+def test_ruta_data_con_region_agrega_subcarpeta(tmp_path):
+    cfg = {"rutas": {"data": str(tmp_path / "data")}, "region": {"id": "atacama"}}
+    ruta = ruta_data(cfg, "dem", "dem.tif")
+    assert ruta == tmp_path / "data" / "atacama" / "dem" / "dem.tif"
+
+
+def test_ruta_outputs_usa_su_propia_clave_y_region(tmp_path):
+    cfg = {"rutas": {"data": str(tmp_path / "data"), "outputs": str(tmp_path / "outputs")},
+           "region": {"id": "coquimbo"}}
+    ruta = ruta_outputs(cfg, "mapa.html")
+    assert ruta == tmp_path / "outputs" / "coquimbo" / "mapa.html"
