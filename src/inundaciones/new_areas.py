@@ -26,6 +26,18 @@ def _vectorizar(mascara: np.ndarray, transform) -> gpd.GeoDataFrame:
     return gpd.GeoDataFrame(geometry=geoms, crs="EPSG:4326")
 
 
+def _filtrar_por_area_minima(gdf: gpd.GeoDataFrame, celda_km2: float) -> gpd.GeoDataFrame:
+    """Descarta polígonos menores a AREA_MINIMA_CELDAS celdas (ruido de remuestreo).
+
+    El área se mide reproyectando a UTM 19S (EPSG:32719): medirla en el CRS
+    geográfico original (grados) sesga con cos(lat) y no representa área real.
+    """
+    if gdf.empty:
+        return gdf
+    gdf["area_km2"] = gdf.geometry.to_crs(32719).area / 1e6
+    return gdf[gdf.area_km2 >= AREA_MINIMA_CELDAS * celda_km2]
+
+
 def identificar_zonas_nuevas(cfg: dict, sufijo: str = "proyectada") -> dict[str, Path]:
     extension, transform, _ = leer_raster(ruta_outputs(cfg, f"extension_{sufijo}.tif"))
     ruta_union = ruta_data(cfg, "historical", "huella_historica_union.tif")
@@ -45,10 +57,7 @@ def identificar_zonas_nuevas(cfg: dict, sufijo: str = "proyectada") -> dict[str,
         guardar_raster(raster, mascara.astype("uint8"), transform, nodata=255,
                        dtype="uint8")
         gdf = _vectorizar(mascara, transform)
-        if not gdf.empty:
-            # área real en UTM 19S (medir en CRS geográfico sesga con cos(lat))
-            gdf["area_km2"] = gdf.geometry.to_crs(32719).area / 1e6
-            gdf = gdf[gdf.area_km2 >= AREA_MINIMA_CELDAS * celda_km2]
+        gdf = _filtrar_por_area_minima(gdf, celda_km2)
         geojson = ruta_outputs(cfg, f"{nombre}_{sufijo}.geojson")
         gdf.to_file(geojson, driver="GeoJSON")
         rutas[nombre] = geojson

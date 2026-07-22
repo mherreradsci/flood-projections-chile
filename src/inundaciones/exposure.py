@@ -25,6 +25,19 @@ def _area_urbana_ha(extension: np.ndarray, worldcover: np.ndarray, celda_ha: flo
     return round(float(((extension == 1) & (worldcover == 50)).sum() * celda_ha), 1)
 
 
+def _vias_expuestas(vias: gpd.GeoDataFrame, poligono) -> tuple[gpd.GeoDataFrame, float]:
+    """Tramos de `vias` que intersectan `poligono` y su longitud total (km).
+
+    La longitud se mide reproyectando a UTM 19S (EPSG:32719): en el CRS
+    geográfico original (grados) no representa una distancia real.
+    """
+    afectadas = gpd.clip(vias, poligono)
+    if afectadas.empty:
+        return afectadas, 0.0
+    km = round(float(afectadas.to_crs(32719).geometry.length.sum() / 1000), 1)
+    return afectadas, km
+
+
 def _configurar_osmnx(cfg: dict):
     import osmnx as ox
     ox.settings.overpass_url = cfg.get("exposicion", {}).get(
@@ -109,10 +122,8 @@ def evaluar_exposicion(cfg: dict, sufijo: str = "proyectada") -> Path:
             for _, fila in dentro.iterrows()]
 
         vias = gpd.read_file(capas["vias"])
-        afectadas = gpd.clip(vias, poligono)
+        afectadas, resumen["vias_km"] = _vias_expuestas(vias, poligono)
         if not afectadas.empty:
-            resumen["vias_km"] = round(float(
-                afectadas.to_crs(32719).geometry.length.sum() / 1000), 1)
             afectadas[["geometry"]].to_file(
                 ruta_outputs(cfg, f"vias_expuestas_{sufijo}.geojson"),
                 driver="GeoJSON")

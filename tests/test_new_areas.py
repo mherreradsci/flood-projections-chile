@@ -1,8 +1,10 @@
+import geopandas as gpd
 import numpy as np
 import pytest
 from rasterio.transform import Affine
+from shapely.geometry import box
 
-from inundaciones.new_areas import _vectorizar
+from inundaciones.new_areas import _filtrar_por_area_minima, _vectorizar
 
 TRANSFORM = Affine(0.001, 0.0, -71.0, 0.0, -0.001, -30.0)
 
@@ -33,3 +35,20 @@ def test_dos_bloques_disjuntos_dan_dos_poligonos():
     mascara[7:9, 7:9] = True
     gdf = _vectorizar(mascara, TRANSFORM)
     assert len(gdf) == 2
+
+
+def test_filtra_poligonos_bajo_el_area_minima():
+    # a esta latitud, "grande" mide muchos km²; "chico", una fracción de m²
+    grande = box(-71.02, -30.02, -70.98, -29.98)
+    chico = box(-71.0001, -30.0001, -70.9999, -29.9999)
+    gdf = gpd.GeoDataFrame({"nombre": ["grande", "chico"]},
+                           geometry=[grande, chico], crs="EPSG:4326")
+    filtrado = _filtrar_por_area_minima(gdf, celda_km2=0.01)  # umbral: 4*0.01 = 0.04 km²
+    assert list(filtrado.nombre) == ["grande"]
+
+
+def test_gdf_vacio_se_devuelve_sin_cambios():
+    gdf = gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+    filtrado = _filtrar_por_area_minima(gdf, celda_km2=0.01)
+    assert filtrado.empty
+    assert "area_km2" not in filtrado.columns
