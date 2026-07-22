@@ -29,6 +29,22 @@ def obtener_region(cfg: dict) -> gpd.GeoDataFrame:
     return gdf
 
 
+def _subcuencas_en_region(cuencas: gpd.GeoDataFrame, region: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Subcuencas cuyo punto representativo cae dentro de la región.
+
+    representative_point no dispara el warning de CRS geográfico y siempre
+    queda dentro del polígono, a diferencia del centroide. Si ninguna cae
+    dentro (región mal definida, subcuencas muy groseras), se conservan
+    todas en vez de devolver un conjunto vacío.
+    """
+    dentro = cuencas[cuencas.geometry.representative_point().within(region.union_all())]
+    if dentro.empty:
+        dentro = cuencas
+    dentro = dentro[["HYBAS_ID", "NEXT_DOWN", "SUB_AREA", "geometry"]].copy()
+    dentro["HYBAS_ID"] = dentro["HYBAS_ID"].astype("int64")
+    return dentro
+
+
 def obtener_subcuencas(cfg: dict) -> gpd.GeoDataFrame:
     """Subcuencas HydroBASINS recortadas a la región."""
     destino = ruta_data(cfg, "vector", "subcuencas.geojson")
@@ -47,14 +63,7 @@ def obtener_subcuencas(cfg: dict) -> gpd.GeoDataFrame:
     region = obtener_region(cfg)
     bbox = tuple(region.total_bounds)
     cuencas = gpd.read_file(f"zip://{zip_local}", bbox=bbox)
-    # conservar subcuencas cuyo punto representativo cae en la región
-    # (representative_point no dispara el warning de CRS geográfico y
-    # siempre queda dentro del polígono, a diferencia del centroide)
-    dentro = cuencas[cuencas.geometry.representative_point().within(region.union_all())]
-    if dentro.empty:
-        dentro = cuencas
-    dentro = dentro[["HYBAS_ID", "NEXT_DOWN", "SUB_AREA", "geometry"]].copy()
-    dentro["HYBAS_ID"] = dentro["HYBAS_ID"].astype("int64")
+    dentro = _subcuencas_en_region(cuencas, region)
     dentro.to_file(destino, driver="GeoJSON")
     log.info("Subcuencas en la región: %d", len(dentro))
     return dentro
