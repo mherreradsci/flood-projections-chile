@@ -7,8 +7,15 @@ import numpy as np
 from rasterio import features
 from shapely.geometry import shape
 
-from .utils import (area_celda_m2, cargar_config, guardar_raster, leer_raster,
-                    log, ruta_data, ruta_outputs)
+from .utils import (
+    area_celda_m2,
+    cargar_config,
+    guardar_raster,
+    leer_raster,
+    log,
+    ruta_data,
+    ruta_outputs,
+)
 
 AREA_MINIMA_CELDAS = 4  # descarta manchas menores (ruido de remuestreo)
 

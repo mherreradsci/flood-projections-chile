@@ -14,9 +14,10 @@ Requiere cuenta gratuita en dataspace.copernicus.eu. La autenticación OIDC
 token queda cacheado por openeo para las siguientes corridas.
 """
 
+from pathlib import Path
+
 import numpy as np
 import rasterio
-from pathlib import Path
 from rasterio.warp import Resampling, reproject
 
 from .utils import cargar_config, guardar_raster, leer_raster, log, ruta_data
@@ -35,7 +36,6 @@ TESELA_DEG = 0.6  # los jobs grandes hacen segfault en Orfeo; sync por teselas
 
 def _teselas(cfg: dict) -> list[tuple[float, float, float, float]]:
     """Grilla de teselas del bbox que intersectan el polígono regional."""
-    import geopandas as gpd
     from shapely.geometry import box
 
     from .aoi import obtener_region

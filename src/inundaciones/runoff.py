@@ -15,8 +15,7 @@ from rasterio import features
 
 from . import ingest_forecast
 from .aoi import obtener_subcuencas
-from .utils import (area_celda_m2, cargar_config, guardar_raster, leer_raster,
-                    log, ruta_data)
+from .utils import area_celda_m2, cargar_config, guardar_raster, leer_raster, log, ruta_data
 
 
 def rasterizar_subcuencas(cfg: dict) -> Path:

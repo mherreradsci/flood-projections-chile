@@ -22,10 +22,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .flood_model import _umbral_para_volumen
 from .runoff import calcular_escorrentia, rasterizar_subcuencas
-from .utils import (area_celda_m2, cargar_config, leer_raster, log, ruta_data,
-                    ruta_outputs)
+from .utils import area_celda_m2, cargar_config, leer_raster, log, ruta_data, ruta_outputs
 
 MIN_OBS = 20  # celdas observadas mínimas para calibrar una subcuenca
 

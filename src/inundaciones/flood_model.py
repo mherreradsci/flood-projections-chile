@@ -5,14 +5,20 @@ contenido bajo él (Σ (h − HAND_i)·área_celda) iguala la escorrentía del e
 (enfoque tipo FwDET/GeoFlood). Profundidad = h − HAND en las celdas anegadas.
 """
 
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from .runoff import rasterizar_subcuencas
-from .utils import (area_celda_m2, cargar_config, guardar_raster, leer_raster,
-                    log, ruta_data, ruta_outputs)
+from .utils import (
+    area_celda_m2,
+    cargar_config,
+    guardar_raster,
+    leer_raster,
+    log,
+    ruta_data,
+    ruta_outputs,
+)
 
 PROFUNDIDAD_MIN_M = 0.05  # bajo esto se considera ruido, no anegamiento
 

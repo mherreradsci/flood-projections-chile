@@ -1,0 +1,10 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = ["data", "outputs", "publicacion", "cache", "historia"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["inundaciones"]

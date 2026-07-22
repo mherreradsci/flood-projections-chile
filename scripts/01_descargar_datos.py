@@ -12,8 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from inundaciones import (aoi, ingest_dem, ingest_forecast, ingest_historical,
-                          ingest_landcover)
+from inundaciones import aoi, ingest_dem, ingest_forecast, ingest_historical, ingest_landcover
 from inundaciones.utils import cargar_config, log
 
 

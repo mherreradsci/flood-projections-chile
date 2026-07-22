@@ -1,6 +1,5 @@
 """Área de interés: límite regional (OSM o bbox de config) y subcuencas HydroBASINS."""
 
-from pathlib import Path
 
 import geopandas as gpd
 import requests

@@ -13,10 +13,8 @@ import json
 from pathlib import Path
 
 import geopandas as gpd
-import numpy as np
 
-from .utils import (area_celda_m2, cargar_config, leer_raster, log, ruta_data,
-                    ruta_outputs)
+from .utils import area_celda_m2, cargar_config, leer_raster, log, ruta_data, ruta_outputs
 
 TIMEOUT_S = 600
 

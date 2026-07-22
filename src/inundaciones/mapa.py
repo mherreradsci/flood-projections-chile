@@ -16,7 +16,7 @@ import rasterio
 from rasterio.warp import Resampling
 
 from . import ingest_forecast
-from .utils import cargar_config, leer_raster, log, ruta_data, ruta_outputs
+from .utils import cargar_config, log, ruta_data, ruta_outputs
 
 MAX_PIXELES_OVERLAY = 1600  # lado mayor de los PNG embebidos en el HTML
 

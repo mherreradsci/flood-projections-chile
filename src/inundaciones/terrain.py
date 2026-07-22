@@ -40,8 +40,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .utils import (area_celda_m2, cargar_config, guardar_raster, leer_raster,
-                    log, ruta_data)
+from .utils import area_celda_m2, cargar_config, guardar_raster, leer_raster, log, ruta_data
 
 
 def preparar_terreno(cfg: dict) -> dict[str, Path]:
