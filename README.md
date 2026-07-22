@@ -1,6 +1,7 @@
 # Proyección de anegamientos — regiones de Coquimbo y Atacama
 
 [![CI](https://github.com/mherreradsci/flood-projections-chile/actions/workflows/ci.yml/badge.svg)](https://github.com/mherreradsci/flood-projections-chile/actions/workflows/ci.yml)
+![Cobertura](docs/coverage.svg)
 
 Sistema en Python para estimar **dónde se producirán anegamientos** ante un
 evento de precipitación extrema (río atmosférico de julio 2026) y detectar los
