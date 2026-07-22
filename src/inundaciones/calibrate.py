@@ -40,6 +40,28 @@ def _metricas(modelo: np.ndarray, observado: np.ndarray) -> dict:
     }
 
 
+def _agregar_factores(reporte: pd.DataFrame, f_min: float, f_max: float
+                      ) -> tuple[dict[str, float], float, int]:
+    """Factor final por subcuenca: media geométrica entre eventos con
+    observación suficiente. Las subcuencas sin observación heredan la
+    mediana regional de esos factores — la ausencia de detección MODIS
+    no implica ausencia de inundación.
+
+    Devuelve (factores por HYBAS_ID, mediana regional, cantidad de
+    subcuencas que heredaron el factor regional).
+    """
+    con_obs = reporte.dropna(subset=["factor"])
+    factores = (con_obs.groupby("HYBAS_ID").factor
+                .apply(lambda s: float(np.exp(np.log(s).mean()))).to_dict())
+    factores = {str(k): float(np.clip(v, f_min, f_max)) for k, v in factores.items()}
+
+    mediana = float(np.median(list(factores.values()))) if factores else 1.0
+    sin_obs = reporte[reporte.factor.isna()].HYBAS_ID.unique()
+    for hybas in sin_obs:
+        factores.setdefault(str(hybas), mediana)
+    return factores, mediana, len(sin_obs)
+
+
 def calibrar(cfg: dict) -> Path:
     hand, transform, _ = leer_raster(ruta_data(cfg, "dem", "hand.tif"))
     ids, _, _ = leer_raster(rasterizar_subcuencas(cfg))
@@ -90,24 +112,15 @@ def calibrar(cfg: dict) -> Path:
     ruta_csv = ruta_outputs(cfg, "calibracion_reporte.csv")
     reporte.to_csv(ruta_csv, index=False)
 
-    # factor final: media geométrica entre eventos con observación suficiente
-    con_obs = reporte.dropna(subset=["factor"])
-    factores = (con_obs.groupby("HYBAS_ID").factor
-                .apply(lambda s: float(np.exp(np.log(s).mean()))).to_dict())
-    factores = {str(k): float(np.clip(v, f_min, f_max)) for k, v in factores.items()}
-
-    # subcuencas sin observación suficiente heredan la mediana regional
-    mediana = float(np.median(list(factores.values()))) if factores else 1.0
-    sin_obs = reporte[reporte.factor.isna()].HYBAS_ID.unique()
-    for hybas in sin_obs:
-        factores.setdefault(str(hybas), mediana)
+    factores, mediana, n_heredadas = _agregar_factores(reporte, f_min, f_max)
 
     destino = ruta_data(cfg, "calibracion.json")
     destino.write_text(json.dumps(factores, indent=2))
+    con_obs = reporte.dropna(subset=["factor"])
     csi_medio = float(con_obs.CSI.mean()) if not con_obs.empty else float("nan")
     log.info("Calibración: %d subcuencas observadas (factor mediano %.2f, "
              "CSI medio %.2f) + %d con factor regional heredado. Reporte: %s",
-             len(con_obs.HYBAS_ID.unique()), mediana, csi_medio, len(sin_obs),
+             len(con_obs.HYBAS_ID.unique()), mediana, csi_medio, n_heredadas,
              ruta_csv)
     return destino
 
