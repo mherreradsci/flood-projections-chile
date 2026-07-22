@@ -13,10 +13,16 @@ import json
 from pathlib import Path
 
 import geopandas as gpd
+import numpy as np
 
 from .utils import area_celda_m2, cargar_config, leer_raster, log, ruta_data, ruta_outputs
 
 TIMEOUT_S = 600
+
+
+def _area_urbana_ha(extension: np.ndarray, worldcover: np.ndarray, celda_ha: float) -> float:
+    """Hectáreas anegadas sobre superficie urbana (clase 50 de ESA WorldCover)."""
+    return round(float(((extension == 1) & (worldcover == 50)).sum() * celda_ha), 1)
 
 
 def _configurar_osmnx(cfg: dict):
@@ -91,7 +97,7 @@ def evaluar_exposicion(cfg: dict, sufijo: str = "proyectada") -> Path:
     lc = leer_raster(ruta_data(cfg, "landcover", "worldcover.tif"))[0]
     lat_media = (cfg["region"]["bbox"][1] + cfg["region"]["bbox"][3]) / 2
     celda_ha = area_celda_m2(transform, lat_media) / 1e4
-    resumen["urbano_ha"] = round(float(((ext == 1) & (lc == 50)).sum() * celda_ha), 1)
+    resumen["urbano_ha"] = _area_urbana_ha(ext, lc, celda_ha)
 
     try:
         capas = descargar_osm_region(cfg)
