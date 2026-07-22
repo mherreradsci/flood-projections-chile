@@ -12,3 +12,13 @@ known-first-party = ["inundaciones"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["src/inundaciones"]
+
+[tool.coverage.report]
+# Piso anti-regresión, no meta de calidad: tests/ cubre a propósito solo
+# funciones puras (ver CLAUDE.md); terrain/ingest_*/mapa/publicar quedan
+# en 0% porque dependen de DEM/GFS/Sentinel-1 reales y se verifican
+# corriendo el pipeline, no con este umbral.
+fail_under = 10

@@ -7,3 +7,5 @@ __pycache__/
 *.pyc
 *.idx
 .ipynb_checkpoints/
+.coverage
+.pytest_cache/
