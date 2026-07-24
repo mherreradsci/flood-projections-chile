@@ -91,6 +91,12 @@ horizonte completo (72 h) en NOAA — el más reciente de ellos es el que usará
 `--fuente gfs` — sin descargar datos (solo HEAD a los `.idx` del bucket
 `noaa-gfs-bdp-pds`).
 
+Utilitario: `scripts/reprocesar_ciclo_gfs.py --ciclo 2026-07-23T06 [--config
+config_atacama.yaml] [--publicar]` rellena huecos en `outputs/<region>/` para
+ciclos GFS puntuales del pasado (p. ej. tras una caída del cron) sin pisar el
+mapa publicado — por defecto no toca `publicacion/`, salvo que se pase
+`--publicar`.
+
 ### Parámetros de `04_proyectar.py`
 
 | Parámetro | Valores | Defecto | Descripción |
