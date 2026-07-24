@@ -139,6 +139,10 @@ borra a sí misma y a la de corridas):
 ```cron
 0 1,7,13,19 16-21 7 * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_gfs.sh # proyeccion-gfs-jul2026
 30 19 21 7 * crontab -l | grep -v proyeccion-gfs-jul2026 | crontab - # proyeccion-gfs-jul2026
+
+30 1,7,13,19 16-21 7 * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_atacama_gfs.sh # proyeccion-atacama-gfs-jul2026
+45 19 21 7 * crontab -l |  grep -v proyeccion-atacama-gfs-jul2026 | crontab - # proyeccion-atacama-gfs-jul2026
+
 ```
 
 ## Datos usados (todos públicos)
