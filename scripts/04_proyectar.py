@@ -40,6 +40,12 @@ def main():
         ingest_forecast.descargar_pronostico(cfg, modelo=args.fuente)
         sufijo = args.fuente
     else:
+        # un nombre de escenario mal escrito es un error de uso: se reporta
+        # con el listado de los válidos y sin traceback, antes de tocar nada
+        try:
+            ingest_forecast.validar_escenario(cfg, args.escenario)
+        except ValueError as exc:
+            parser.error(str(exc))
         ingest_forecast.generar_escenario(cfg, args.escenario)
         sufijo = args.escenario
 

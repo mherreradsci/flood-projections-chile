@@ -3,7 +3,13 @@ from datetime import datetime, timezone
 import numpy as np
 import pytest
 
-from inundaciones.ingest_forecast import _estado_ciclo, _isoterma0_desde_perfil, _ultimo_ciclo_gfs
+from inundaciones.ingest_forecast import (
+    _estado_ciclo,
+    _isoterma0_desde_perfil,
+    _ultimo_ciclo_gfs,
+    escenarios_disponibles,
+    validar_escenario,
+)
 
 
 def test_interpola_linealmente_entre_dos_niveles():
@@ -71,3 +77,60 @@ def test_ultimo_ciclo_gfs_resta_el_rezago_y_redondea_a_6_horas():
 def test_ultimo_ciclo_gfs_en_un_limite_exacto():
     ahora = datetime(2026, 7, 22, 5, 0, tzinfo=timezone.utc)  # -5h -> 22 jul 00:00
     assert _ultimo_ciclo_gfs(ahora) == datetime(2026, 7, 22, 0, 0, tzinfo=timezone.utc)
+
+
+# --- validación de escenarios -------------------------------------------------
+# `04_proyectar.py --fuente escenario --escenario xxx` con un nombre inexistente
+# reventaba con un KeyError pelado dentro de generar_escenario, sin decir qué
+# escenarios existían.
+
+CFG_ESCENARIOS = {
+    "escenarios": {
+        "extremo_200mm": {"precipitacion_mm": 200, "horas": 72, "isoterma0_m": 3200},
+        "moderado_100mm": {"precipitacion_mm": 100, "horas": 72, "isoterma0_m": 2800},
+    }
+}
+
+
+def test_escenario_valido_devuelve_su_definicion():
+    esc = validar_escenario(CFG_ESCENARIOS, "extremo_200mm")
+    assert esc["precipitacion_mm"] == 200
+    assert esc["isoterma0_m"] == 3200
+
+
+def test_escenario_inexistente_falla_con_valueerror():
+    with pytest.raises(ValueError):
+        validar_escenario(CFG_ESCENARIOS, "no_existe")
+
+
+def test_el_error_nombra_el_escenario_pedido_y_lista_los_validos():
+    """El mensaje es la razón de ser del cambio: sin él no se sabe qué poner."""
+    with pytest.raises(ValueError) as exc:
+        validar_escenario(CFG_ESCENARIOS, "extremo_300mm")
+    msg = str(exc.value)
+    assert "extremo_300mm" in msg
+    assert "extremo_200mm" in msg and "moderado_100mm" in msg
+
+
+def test_config_sin_escenarios_no_revienta_y_lo_dice():
+    """Un config regional puede no definir escenarios; el error debe explicarlo."""
+    for cfg in ({}, {"escenarios": None}, {"escenarios": {}}):
+        with pytest.raises(ValueError) as exc:
+            validar_escenario(cfg, "extremo_200mm")
+        assert "ninguno definido" in str(exc.value)
+
+
+def test_es_sensible_a_mayusculas_y_espacios():
+    """Los nombres son claves de YAML: no se normalizan."""
+    for nombre in ("Extremo_200mm", " extremo_200mm", "extremo_200mm "):
+        with pytest.raises(ValueError):
+            validar_escenario(CFG_ESCENARIOS, nombre)
+
+
+def test_escenarios_disponibles_ordenados():
+    assert escenarios_disponibles(CFG_ESCENARIOS) == ["extremo_200mm", "moderado_100mm"]
+
+
+@pytest.mark.parametrize("cfg", [{}, {"escenarios": None}, {"escenarios": {}}])
+def test_escenarios_disponibles_vacio_sin_definiciones(cfg):
+    assert escenarios_disponibles(cfg) == []

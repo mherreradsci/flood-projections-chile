@@ -306,9 +306,35 @@ def descargar_pronostico(cfg: dict, modelo: str | None = None) -> tuple[Path, di
     return descargar_gfs(cfg)
 
 
+def escenarios_disponibles(cfg: dict) -> list[str]:
+    """Nombres de escenario definidos en el config, ordenados.
+
+    Tolera que no exista la clave `escenarios` o que venga vacía (un config
+    regional puede no definir ninguno): en ese caso devuelve lista vacía.
+    """
+    return sorted(cfg.get("escenarios") or {})
+
+
+def validar_escenario(cfg: dict, nombre: str) -> dict:
+    """Devuelve la definición del escenario `nombre`, o falla explicando cuáles hay.
+
+    Sin esto, un nombre mal escrito reventaba con un `KeyError` pelado recién
+    dentro de `generar_escenario`, sin decir qué escenarios existían.
+    """
+    escenarios = cfg.get("escenarios") or {}
+    if nombre not in escenarios:
+        disponibles = escenarios_disponibles(cfg)
+        detalle = ", ".join(disponibles) if disponibles else "(ninguno definido)"
+        raise ValueError(
+            f"El escenario '{nombre}' no está definido en el config. "
+            f"Escenarios disponibles: {detalle}"
+        )
+    return escenarios[nombre]
+
+
 def generar_escenario(cfg: dict, nombre: str) -> tuple[Path, dict]:
     """Campo uniforme de precipitación según un escenario de config.yaml."""
-    esc = cfg["escenarios"][nombre]
+    esc = validar_escenario(cfg, nombre)
     forma, transform, _ = _grilla_dem(cfg)
     campo = np.full(forma, float(esc["precipitacion_mm"]), dtype="float32")
     destino = ruta_precip(cfg, nombre)
