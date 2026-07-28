@@ -218,9 +218,19 @@ def generar_mapa(cfg: dict, sufijo: str | None = None) -> Path:
     tag = ciclo_tag(meta.get("ciclo"))
     if meta.get("ciclo"):
         ciclo_dt = datetime.fromisoformat(meta["ciclo"])
+        # máx, media y mediana juntas: el máximo es una sola celda (la más
+        # lluviosa de la región) y suele ser varias veces la media, así que
+        # por sí solo da una idea equivocada de cuánta lluvia recibe el
+        # territorio; la mediana separa un frente que moja todo (mediana ≈
+        # media) de un núcleo localizado (mediana ≪ media). La mediana se
+        # agregó después, así que se muestra solo si el meta la trae: los
+        # ciclos descargados antes deben seguir renderizando igual.
+        acum = f"máx {meta['precip_max_mm']} / media {meta['precip_media_mm']}"
+        if meta.get("precip_mediana_mm") is not None:
+            acum += f" / mediana {meta['precip_mediana_mm']}"
         fuente_txt = (f"Fuente lluvia: {meta['fuente'].upper()} "
-                      f"{ciclo_dt:%d-%m-%Y} (ciclo {ciclo_dt:%H} UTC) | acumulado máx "
-                      f"{meta['precip_max_mm']} mm / {meta['horas']} h")
+                      f"{ciclo_dt:%d-%m-%Y} (ciclo {ciclo_dt:%H} UTC) | "
+                      f"acumulado {acum} mm en {meta['horas']} h")
     else:
         fuente_txt = (f"Escenario sintético: {meta['precip_max_mm']} mm / "
                       f"{meta['horas']} h uniformes (no depende de ciclo GFS)")

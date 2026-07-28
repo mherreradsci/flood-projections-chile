@@ -215,6 +215,9 @@ def descargar_gfs(cfg: dict) -> tuple[Path, dict]:
         "isoterma0_m": round(isoterma),
         "precip_max_mm": round(float(np.nanmax(precip_dem)), 1),
         "precip_media_mm": round(float(np.nanmean(precip_dem)), 1),
+        # la mediana distingue un frente que moja toda la región (mediana ≈
+        # media) de un núcleo localizado (mediana ≪ media); cuesta ~50 ms
+        "precip_mediana_mm": round(float(np.nanmedian(precip_dem)), 1),
     }
     ruta_meta(cfg, "gfs").write_text(json.dumps(meta, indent=2))
     log.info("GFS %s: máx %.0f mm / media %.0f mm en %d h, isoterma 0 ≈ %d m",
@@ -285,6 +288,9 @@ def descargar_ifs(cfg: dict) -> tuple[Path, dict]:
         "isoterma0_m": round(isoterma),
         "precip_max_mm": round(float(np.nanmax(precip_dem)), 1),
         "precip_media_mm": round(float(np.nanmean(precip_dem)), 1),
+        # la mediana distingue un frente que moja toda la región (mediana ≈
+        # media) de un núcleo localizado (mediana ≪ media); cuesta ~50 ms
+        "precip_mediana_mm": round(float(np.nanmedian(precip_dem)), 1),
     }
     ruta_meta(cfg, "ifs").write_text(json.dumps(meta, indent=2))
     log.info("IFS %s: máx %.0f mm / media %.0f mm en %d h, isoterma 0 ≈ %d m",
@@ -312,8 +318,10 @@ def generar_escenario(cfg: dict, nombre: str) -> tuple[Path, dict]:
         "ciclo": None,
         "horas": esc["horas"],
         "isoterma0_m": esc["isoterma0_m"],
+        # campo uniforme: máx, media y mediana coinciden por construcción
         "precip_max_mm": esc["precipitacion_mm"],
         "precip_media_mm": esc["precipitacion_mm"],
+        "precip_mediana_mm": esc["precipitacion_mm"],
     }
     ruta_meta(cfg, nombre).write_text(json.dumps(meta, indent=2))
     log.info("Escenario '%s': %s mm / %s h, isoterma 0 = %s m",
