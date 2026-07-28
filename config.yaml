@@ -27,6 +27,12 @@ mapa:
   vista_inicial:
     centro: [-29.945, -71.28]   # conurbación La Serena–Coquimbo
     zoom: 12
+  # Lado mayor (px) de los PNG de las capas ráster incrustadas en el HTML.
+  # El DEM de esta región mide 4454 px de lado mayor: con 6000 no se
+  # remuestrea y los bloques del overlay miden lo mismo que las celdas de
+  # las capas vectoriales (~77 m). Bajarlo aliviana el HTML y acelera la
+  # generación, a costa de bloques más gruesos (1600 → ~215 m).
+  max_pixeles_overlay: 6000
 
 dem:
   # 90 m para la corrida regional completa; usar 30 para análisis por cuenca

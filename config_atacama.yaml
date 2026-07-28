@@ -31,6 +31,12 @@ mapa:
   vista_inicial:
     centro: [-27.37, -70.33]   # Copiapó
     zoom: 12
+  # Lado mayor (px) de los PNG de las capas ráster incrustadas en el HTML.
+  # El DEM de Atacama mide 5690 px de lado mayor (más grande que Coquimbo):
+  # con 6000 no se remuestrea y los bloques del overlay coinciden con las
+  # celdas de las capas vectoriales. Bajarlo aliviana el HTML y acelera la
+  # generación, a costa de bloques más gruesos.
+  max_pixeles_overlay: 6000
 
 dem:
   # 90 m para la corrida regional completa; usar 30 para análisis por cuenca
