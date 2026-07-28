@@ -1,6 +1,7 @@
 """Utilidades compartidas: configuración, rutas, logging y rasters."""
 
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -44,6 +45,35 @@ def ruta_data(cfg: dict, *partes: str) -> Path:
 
 def ruta_outputs(cfg: dict, *partes: str) -> Path:
     return _ruta_base(cfg, "outputs", *partes)
+
+
+def ciclo_tag(ciclo_iso: str | None) -> str:
+    """Sufijo `_YYYYMMDD_HHutc` que identifica el ciclo en el nombre del mapa.
+
+    Vacío cuando no hay ciclo (escenario sintético: la lluvia no viene de una
+    corrida GFS/IFS). Es la única definición del formato — `mapa.generar_mapa`
+    lo usa para nombrar el HTML y `mapas_de_ciclo` para buscarlo, así el
+    detector de duplicados no puede desincronizarse del nombre real.
+    """
+    if not ciclo_iso:
+        return ""
+    dt = datetime.fromisoformat(ciclo_iso)
+    return f"_{dt:%Y%m%d}_{dt:%H}utc"
+
+
+def mapas_de_ciclo(cfg: dict, sufijo: str, ciclo_iso: str | None) -> list[Path]:
+    """Mapas ya generados en outputs/ para ese ciclo, ordenados por nombre.
+
+    El nombre del HTML lleva ciclo *y* timestamp de render, así que reprocesar
+    un ciclo agrega un archivo en vez de reemplazarlo: más de un resultado
+    aquí significa que el ciclo ya se renderizó varias veces (duplicado).
+    Lista vacía para escenarios sintéticos, que no tienen ciclo.
+    """
+    tag = ciclo_tag(ciclo_iso)
+    if not tag:
+        return []
+    patron = f"mapa_anegamientos_{sufijo}{tag}_*.html"
+    return sorted(ruta_outputs(cfg, patron).parent.glob(patron))
 
 
 def guardar_raster(ruta: Path, datos: np.ndarray, transform: Affine, crs="EPSG:4326",

@@ -16,7 +16,7 @@ import rasterio
 from rasterio.warp import Resampling
 
 from . import ingest_forecast
-from .utils import cargar_config, log, ruta_data, ruta_outputs
+from .utils import cargar_config, ciclo_tag, log, ruta_data, ruta_outputs
 
 MAX_PIXELES_OVERLAY = 1600  # lado mayor de los PNG embebidos en el HTML
 
@@ -131,10 +131,9 @@ def generar_mapa(cfg: dict, sufijo: str | None = None) -> Path:
                                show=False).add_to(mapa)
 
     generado = datetime.now()
-    ciclo_tag = ""
+    tag = ciclo_tag(meta.get("ciclo"))
     if meta.get("ciclo"):
         ciclo_dt = datetime.fromisoformat(meta["ciclo"])
-        ciclo_tag = f"_{ciclo_dt:%Y%m%d}_{ciclo_dt:%H}utc"
         fuente_txt = (f"Fuente lluvia: {meta['fuente'].upper()} "
                       f"{ciclo_dt:%d-%m-%Y} (ciclo {ciclo_dt:%H} UTC) | acumulado máx "
                       f"{meta['precip_max_mm']} mm / {meta['horas']} h")
@@ -203,7 +202,7 @@ document.addEventListener('DOMContentLoaded', function () {
     mapa.get_root().html.add_child(folium.Element(responsive))
 
     destino = ruta_outputs(
-        cfg, f"mapa_anegamientos_{sufijo}{ciclo_tag}_{generado:%Y%m%d-%H%M%S}.html")
+        cfg, f"mapa_anegamientos_{sufijo}{tag}_{generado:%Y%m%d-%H%M%S}.html")
     mapa.save(str(destino))
     log.info("Mapa guardado: %s", destino)
     return destino

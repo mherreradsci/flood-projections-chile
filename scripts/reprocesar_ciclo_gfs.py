@@ -6,6 +6,7 @@ Uso:
   python scripts/reprocesar_ciclo_gfs.py --ciclo 2026-07-23T00 --ciclo 2026-07-23T12
   python scripts/reprocesar_ciclo_gfs.py --ciclo 2026-07-23T06 --config config_atacama.yaml
   python scripts/reprocesar_ciclo_gfs.py --ciclo 2026-07-23T18 --publicar
+  python scripts/reprocesar_ciclo_gfs.py --ciclo 2026-07-23T00 --forzar
 
 Para cuándo sirve: el cron se cayó (o hubo que reinstalarlo) y quedaron
 huecos en outputs/<region>/ para ciclos que sí llegaron a publicarse en
@@ -13,6 +14,13 @@ NOAA mientras tanto. `04_proyectar.py --fuente gfs` solo sabe pedir "el
 ciclo más reciente"; este script fuerza un ciclo puntual monkeypencheando
 `ingest_forecast._ciclo_gfs_para_descarga` (Herbie sí acepta cualquier
 fecha, la resolución "más reciente" es solo nuestro default).
+
+Por defecto OMITE los ciclos que ya tienen mapa en `outputs/<region>/`: el
+nombre del HTML lleva ciclo *y* timestamp de render, así que reprocesar no
+reemplaza el archivo previo sino que agrega otro para el mismo ciclo (así
+apareció el duplicado de atacama 18-jul-2026 06 UTC). La comprobación corre
+antes de descargar el GRIB, de modo que omitir no cuesta red. Con `--forzar`
+se genera el render adicional igual.
 
 Por defecto NO publica: no toca `publicacion/<region>/mapa_gfs.html`, el
 mapa vivo que consume el carrusel externo, porque se asume que se está
@@ -37,7 +45,7 @@ from inundaciones.mapa import generar_mapa
 from inundaciones.new_areas import identificar_zonas_nuevas
 from inundaciones.publicar import publicar_mapa
 from inundaciones.runoff import calcular_escorrentia
-from inundaciones.utils import cargar_config, log
+from inundaciones.utils import cargar_config, log, mapas_de_ciclo
 
 
 def _parse_ciclo(texto: str) -> datetime:
@@ -88,12 +96,32 @@ def main():
                         help="además actualiza publicacion/<region>/mapa_gfs.html (por defecto no)")
     parser.add_argument("--sin-exposicion", action="store_true",
                         help="omite la consulta OSM de infraestructura expuesta")
+    parser.add_argument("--forzar", action="store_true",
+                        help="reprocesa aunque el ciclo ya tenga mapa en outputs/ "
+                             "(genera un render adicional, no reemplaza el previo)")
     args = parser.parse_args()
 
     cfg = cargar_config(args.config)
+    hechos, omitidos = 0, 0
     for texto in args.ciclo:
-        reprocesar(cfg, _parse_ciclo(texto), publicar=args.publicar,
-                  sin_exposicion=args.sin_exposicion)
+        ciclo = _parse_ciclo(texto)
+        previos = mapas_de_ciclo(cfg, "gfs", ciclo.isoformat())
+        if previos and not args.forzar:
+            # el nombre lleva timestamp de render: reprocesar agregaría un
+            # archivo más para el mismo ciclo, no lo reemplazaría
+            log.warning("Ciclo %s ya tiene %d mapa(s) en outputs/ (%s); lo omito. "
+                        "Usar --forzar para generar otro render de todos modos.",
+                        ciclo.isoformat(), len(previos), previos[-1].name)
+            omitidos += 1
+            continue
+        if previos:
+            log.warning("Ciclo %s ya tenía %d mapa(s); --forzar: se agrega otro render.",
+                        ciclo.isoformat(), len(previos))
+        reprocesar(cfg, ciclo, publicar=args.publicar,
+                   sin_exposicion=args.sin_exposicion)
+        hechos += 1
+
+    log.info("Reprocesados %d ciclo(s), omitidos %d por mapa existente", hechos, omitidos)
 
 
 if __name__ == "__main__":
