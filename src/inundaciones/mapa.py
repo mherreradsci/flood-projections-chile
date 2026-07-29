@@ -39,6 +39,18 @@ PROFUNDIDAD_UMBRAL = 0.05   # = flood_model.PROFUNDIDAD_MIN_M
 PROFUNDIDAD_ALFA_MIN = 0.22
 PROFUNDIDAD_OPACIDAD = 0.65
 
+# Ídem para la capa de lluvia. A diferencia de profundidad, su vmax NO es
+# constante: `_overlay` lo autoescala al máximo regional del ciclo, así que la
+# leyenda se arma con el valor que devuelve el overlay y no con una constante.
+# Sin números impresos, dos regiones del mismo ciclo se ven iguales con
+# acumulados muy distintos (Atacama 11 mm y Coquimbo 62 mm el 29-07-2026 se
+# dibujaban ambas con el mismo azul saturado a cada lado del límite regional).
+CAPA_PRECIPITACION = "Precipitación pronosticada (mm)"
+PRECIPITACION_CMAP = "Blues"
+PRECIPITACION_UMBRAL = 1.0
+PRECIPITACION_ALFA_MIN = 0.0
+PRECIPITACION_OPACIDAD = 0.7
+
 
 def _leer_reducido(ruta: Path, max_px: int = MAX_PIXELES_OVERLAY
                    ) -> tuple[np.ndarray, list]:
@@ -87,8 +99,9 @@ def _overlay(mapa, ruta, nombre, cmap, vmax=None, opacidad=0.65, mostrar=True,
     return vmax
 
 
-def _paradas_gradiente(n: int = 11) -> list[str]:
-    """Paradas CSS del degradado, muestreadas del colormap de profundidad.
+def _paradas_gradiente(cmap: str, alfa_min: float, opacidad: float,
+                       n: int = 11) -> list[str]:
+    """Paradas CSS del degradado, muestreadas del colormap de la capa.
 
     Se reproduce también el alfa del overlay (piso `alfa_min` → `opacidad`),
     de modo que la barra se vea como se ve el ráster sobre el mapa base y no
@@ -97,41 +110,93 @@ def _paradas_gradiente(n: int = 11) -> list[str]:
     paradas = []
     for i in range(n):
         t = i / (n - 1)
-        r, g, b, _ = matplotlib.colormaps[PROFUNDIDAD_CMAP](t)
-        alfa = PROFUNDIDAD_ALFA_MIN + (PROFUNDIDAD_OPACIDAD - PROFUNDIDAD_ALFA_MIN) * t
+        r, g, b, _ = matplotlib.colormaps[cmap](t)
+        alfa = alfa_min + (opacidad - alfa_min) * t
         paradas.append(f"rgba({round(r * 255)},{round(g * 255)},{round(b * 255)},"
                        f"{alfa:.2f}) {round(t * 100)}%")
     return paradas
 
 
-def _leyenda_profundidad() -> str:
-    """Barra de color flotante para la capa de profundidad.
+def _fmt_mm(v: float) -> str:
+    """Milímetros para las marcas de la barra: sin decimales desde 10 mm.
 
-    Se muestra/oculta con la capa (eventos overlayadd/overlayremove de
-    Leaflet): sin eso quedaría una referencia de colores visible aunque la
-    capa esté apagada. El fondo va a cuadros claros porque la rampa es
-    semitransparente y sobre blanco puro los valores bajos no se distinguen.
+    El vmax de lluvia sale de `np.nanmax`, así que trae ruido de punto flotante
+    ('62.24000549316406'); redondear a un ancho fijo mantiene las tres marcas
+    legibles en la barra angosta del móvil.
     """
-    gradiente = ", ".join(_paradas_gradiente())
-    medio = PROFUNDIDAD_VMAX / 2
+    return f"{v:.0f}" if abs(v) >= 10 else f"{v:.1f}"
+
+
+def _leyenda(id_html: str, titulo: str, cmap: str, alfa_min: float,
+             opacidad: float, etiquetas: tuple[str, str, str],
+             mostrar: bool = True, nota: str = "") -> str:
+    """Barra de color flotante de una capa ráster.
+
+    `etiquetas` son las marcas izquierda/centro/derecha ya formateadas: cada
+    capa decide cómo rotularlas (profundidad clampea en su vmax y escribe
+    '≥3'; lluvia autoescala al máximo real y no clampea nada). El fondo va a
+    cuadros claros porque la rampa es semitransparente y sobre blanco puro los
+    valores bajos no se distinguen.
+    """
+    gradiente = ", ".join(_paradas_gradiente(cmap, alfa_min, opacidad))
+    izq, centro, der = etiquetas
+    oculto = "" if mostrar else "display:none;"
+    attr_nota = f" title='{nota}'" if nota else ""
     return f"""
-<div id='leyenda-profundidad' style='position:fixed;bottom:32px;left:10px;
-     z-index:1000;background:rgba(255,255,255,.92);padding:6px 10px;
-     border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.3);
-     font-family:sans-serif;font-size:12px'>
-  <div style='font-weight:bold;margin-bottom:4px'>Profundidad anegamiento (m)</div>
-  <div id='barra-profundidad'
-       style='width:160px;height:12px;border:1px solid #999;border-radius:2px;
-       background-color:#e8e8e8;
-       background-image:linear-gradient(to right, {gradiente}),
-         repeating-conic-gradient(#fff 0% 25%, #d8d8d8 0% 50%);
-       background-size:100% 100%, 8px 8px'></div>
-  <div style='display:flex;justify-content:space-between;color:#444;
-       margin-top:2px'>
-    <span>{PROFUNDIDAD_UMBRAL:g}</span><span>{medio:g}</span>
-    <span>&ge;{PROFUNDIDAD_VMAX:g}</span>
+<div class='leyenda-mapa' id='{id_html}' style='{oculto}'>
+  <div class='leyenda-titulo'>{titulo}</div>
+  <div class='leyenda-barra'{attr_nota}
+       style='background-image:linear-gradient(to right, {gradiente}),
+         repeating-conic-gradient(#fff 0% 25%, #d8d8d8 0% 50%)'></div>
+  <div class='leyenda-marcas'>
+    <span>{izq}</span><span>{centro}</span><span>{der}</span>
   </div>
 </div>
+"""
+
+
+def _estilos_leyendas() -> str:
+    """CSS común de las leyendas: contenedor apilado + look de cada barra.
+
+    El contenedor es flex `column-reverse` anclado abajo a la izquierda: al
+    ocultar una leyenda su caja colapsa y la otra baja sola al ancla, así las
+    dos capas se pueden prender y apagar en cualquier orden sin que queden
+    huecos ni superposiciones. El `bottom` deja libre el control de escala de
+    Leaflet, que con sus dos filas (km y mi) sube hasta 35px del borde: con
+    los 32px que había antes la fila de marcas quedaba tapada.
+    """
+    return """
+<style>
+#leyendas-mapa {
+  /* barra y marcas comparten el ancho: si se escriben por separado, la fila
+     de marcas la termina estirando el título (más largo que la barra) y la
+     marca derecha queda pasada del extremo del degradado */
+  --ancho-barra: 160px;
+  position: fixed; bottom: 40px; left: 10px; z-index: 1000;
+  display: flex; flex-direction: column-reverse; gap: 6px;
+  font-family: sans-serif; font-size: 12px;
+}
+.leyenda-mapa {
+  background: rgba(255,255,255,.92); padding: 6px 10px; border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+.leyenda-titulo { font-weight: bold; margin-bottom: 4px; }
+.leyenda-barra {
+  width: var(--ancho-barra); height: 12px; border: 1px solid #999;
+  border-radius: 2px;
+  background-color: #e8e8e8; background-size: 100% 100%, 8px 8px;
+}
+.leyenda-marcas {
+  display: flex; width: var(--ancho-barra); color: #444; margin-top: 2px;
+}
+/* tercios iguales en vez de space-between: con etiquetas de ancho distinto
+   ('1.0' vs '16') space-between descentra la del medio respecto del 50% de
+   la barra. Los extremos van pegados a los bordes para no desbordarla. */
+.leyenda-marcas span { flex: 1 1 0; }
+.leyenda-marcas span:first-child { text-align: left; }
+.leyenda-marcas span:nth-child(2) { text-align: center; }
+.leyenda-marcas span:last-child { text-align: right; }
+</style>
 """
 
 
@@ -162,10 +227,13 @@ def generar_mapa(cfg: dict, sufijo: str | None = None) -> Path:
                      show=False).add_to(mapa)
 
     # precipitación (alfa gradual: los núcleos intensos resaltan, el resto
-    # deja ver el mapa base)
-    _overlay(mapa, ingest_forecast.ruta_precip(cfg, sufijo),
-             "Precipitación pronosticada (mm)", "Blues", opacidad=0.7,
-             mostrar=False, umbral=1.0, gradual=True, max_px=max_px)
+    # deja ver el mapa base). vmax queda autoescalado al máximo regional y se
+    # captura para rotular la leyenda con el mismo valor que se dibujó.
+    precip_vmax = _overlay(
+        mapa, ingest_forecast.ruta_precip(cfg, sufijo),
+        CAPA_PRECIPITACION, PRECIPITACION_CMAP,
+        opacidad=PRECIPITACION_OPACIDAD, mostrar=False,
+        umbral=PRECIPITACION_UMBRAL, gradual=True, max_px=max_px)
     # profundidad proyectada: alfa gradual con piso, para que las láminas
     # delgadas (la mayoría de las celdas) tiñan el fondo en vez de taparlo
     _overlay(mapa, ruta_outputs(cfg, f"profundidad_{sufijo}.tif"),
@@ -246,24 +314,48 @@ def generar_mapa(cfg: dict, sufijo: str | None = None) -> Path:
               f"<span style='color:#666;font-size:0.85em'>generado: "
               f"{generado:%d-%m-%Y %H:%M:%S}</span></span></div>")
     mapa.get_root().html.add_child(folium.Element(titulo))
-    mapa.get_root().html.add_child(folium.Element(_leyenda_profundidad()))
+
+    # Leyendas: profundidad primero en el DOM para que el `column-reverse` la
+    # deje abajo (es la capa encendida por default, conviene que su posición
+    # no se mueva cuando se prende la de lluvia, que aparece encima).
+    leyenda_profundidad = _leyenda(
+        "leyenda-profundidad", "Profundidad anegamiento (m)",
+        PROFUNDIDAD_CMAP, PROFUNDIDAD_ALFA_MIN, PROFUNDIDAD_OPACIDAD,
+        (f"{PROFUNDIDAD_UMBRAL:g}", f"{PROFUNDIDAD_VMAX / 2:g}",
+         f"&ge;{PROFUNDIDAD_VMAX:g}"))
+    # la de lluvia arranca oculta: su capa se agrega con mostrar=False
+    leyenda_precip = _leyenda(
+        "leyenda-precipitacion", f"Precipitación ({meta['horas']} h, mm)",
+        PRECIPITACION_CMAP, PRECIPITACION_ALFA_MIN, PRECIPITACION_OPACIDAD,
+        (_fmt_mm(PRECIPITACION_UMBRAL), _fmt_mm(precip_vmax / 2),
+         _fmt_mm(precip_vmax)),
+        mostrar=False,
+        nota="Escala ajustada al máximo de esta región y ciclo: "
+             "los colores no son comparables entre regiones.")
+    mapa.get_root().html.add_child(folium.Element(_estilos_leyendas()))
+    mapa.get_root().html.add_child(folium.Element(
+        f"<div id='leyendas-mapa'>{leyenda_profundidad}{leyenda_precip}</div>"))
     folium.LayerControl(collapsed=False).add_to(mapa)
 
-    # La leyenda solo tiene sentido con su capa encendida. Leaflet emite
+    # Cada leyenda solo tiene sentido con su capa encendida. Leaflet emite
     # overlayadd/overlayremove con el nombre de la capa al togglearla desde
     # el LayerControl; el nombre del objeto mapa lo pone folium al generar.
+    por_capa = {CAPA_PROFUNDIDAD: "leyenda-profundidad",
+                CAPA_PRECIPITACION: "leyenda-precipitacion"}
     sync_leyenda = f"""
 <script>
 document.addEventListener('DOMContentLoaded', function () {{
-  var leyenda = document.getElementById('leyenda-profundidad');
-  if (!leyenda || typeof {mapa.get_name()} === 'undefined') return;
-  var capa = {json.dumps(CAPA_PROFUNDIDAD)};
-  {mapa.get_name()}.on('overlayadd', function (e) {{
-    if (e.name === capa) leyenda.style.display = 'block';
-  }});
-  {mapa.get_name()}.on('overlayremove', function (e) {{
-    if (e.name === capa) leyenda.style.display = 'none';
-  }});
+  if (typeof {mapa.get_name()} === 'undefined') return;
+  var porCapa = {json.dumps(por_capa, ensure_ascii=False)};
+  function alternar(visible) {{
+    return function (e) {{
+      var id = porCapa[e.name];
+      var leyenda = id && document.getElementById(id);
+      if (leyenda) leyenda.style.display = visible ? 'block' : 'none';
+    }};
+  }}
+  {mapa.get_name()}.on('overlayadd', alternar(true));
+  {mapa.get_name()}.on('overlayremove', alternar(false));
 }});
 </script>
 """
@@ -287,12 +379,17 @@ document.addEventListener('DOMContentLoaded', function () {{
   #titulo-flecha { display: inline; font-size: 0.8em; color: #666; }
   #titulo-mapa:not(.expandido) #titulo-detalle { display: none; }
   #titulo-mapa.expandido #titulo-flecha { display: none; }
-  #leyenda-profundidad {
+  /* las dos leyendas pueden estar visibles a la vez: se achican y se juntan
+     para que apiladas sigan cabiendo sobre el borde inferior del mapa */
+  #leyendas-mapa {
     font-size: 0.72em !important;
-    padding: 4px 7px !important;
-    bottom: 26px !important;
+    /* el control de escala no se achica con el media query: mismos 35px que
+       en desktop, así que el ancla tampoco puede bajar de ahí */
+    bottom: 38px !important;
+    gap: 4px !important;
+    --ancho-barra: 105px;   /* barra y marcas lo toman de acá */
   }
-  #barra-profundidad { width: 105px !important; }
+  .leyenda-mapa { padding: 4px 7px !important; }
 }
 </style>
 <script>
