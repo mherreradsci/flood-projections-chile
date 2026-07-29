@@ -97,6 +97,27 @@ ciclos GFS puntuales del pasado (p. ej. tras una caída del cron) sin pisar el
 mapa publicado — por defecto no toca `publicacion/`, salvo que se pase
 `--publicar`.
 
+`--ciclo` es repetible: una sola llamada puede reprocesar varios ciclos en
+secuencia (por ejemplo, todo un evento). Así se rellenaron los 25 ciclos GFS
+de Atacama entre el 2026-07-12T00 y el 2026-07-18T00 (cada 6 h):
+
+```bash
+.venv/bin/python scripts/reprocesar_ciclo_gfs.py --config config_atacama.yaml \
+  --ciclo 2026-07-12T00 --ciclo 2026-07-12T06 --ciclo 2026-07-12T12 --ciclo 2026-07-12T18 \
+  --ciclo 2026-07-13T00 --ciclo 2026-07-13T06 --ciclo 2026-07-13T12 --ciclo 2026-07-13T18 \
+  --ciclo 2026-07-14T00 --ciclo 2026-07-14T06 --ciclo 2026-07-14T12 --ciclo 2026-07-14T18 \
+  --ciclo 2026-07-15T00 --ciclo 2026-07-15T06 --ciclo 2026-07-15T12 --ciclo 2026-07-15T18 \
+  --ciclo 2026-07-16T00 --ciclo 2026-07-16T06 --ciclo 2026-07-16T12 --ciclo 2026-07-16T18 \
+  --ciclo 2026-07-17T00 --ciclo 2026-07-17T06 --ciclo 2026-07-17T12 --ciclo 2026-07-17T18 \
+  --ciclo 2026-07-18T00
+```
+
+Toda la llamada —sin importar cuántos `--ciclo` lleve— queda en un solo
+archivo de log, `outputs/<region>/logs/reprocesar_<timestamp>.log` (mismo
+directorio y formato que usa `correr_proyeccion_gfs.sh` para `04_proyectar.py`),
+con un bloque `== inicio ==`/`== fin ==` por corrida y una línea por ciclo
+procesado.
+
 ### Parámetros de `04_proyectar.py`
 
 | Parámetro | Valores | Defecto | Descripción |
