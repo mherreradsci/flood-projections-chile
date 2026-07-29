@@ -25,13 +25,35 @@ def _area_urbana_ha(extension: np.ndarray, worldcover: np.ndarray, celda_ha: flo
     return round(float(((extension == 1) & (worldcover == 50)).sum() * celda_ha), 1)
 
 
+def _partes(geometria) -> list:
+    """Partes de una geometría: los sub-polígonos de un Multi*, o ella misma.
+
+    Las partes de un Multi* son disjuntas por definición, así que recortar
+    contra cada una y sumar equivale a recortar contra el conjunto, sin doble
+    conteo. Es lo que permite el truco de `_vias_expuestas`.
+    """
+    return list(geometria.geoms) if hasattr(geometria, "geoms") else [geometria]
+
+
 def _vias_expuestas(vias: gpd.GeoDataFrame, poligono) -> tuple[gpd.GeoDataFrame, float]:
     """Tramos de `vias` que intersectan `poligono` y su longitud total (km).
 
     La longitud se mide reproyectando a UTM 19S (EPSG:32719): en el CRS
     geográfico original (grados) no representa una distancia real.
+
+    No se usa `gpd.clip` contra el polígono unificado. Su prefiltro por índice
+    espacial compara contra el *bbox* de la máscara, y una máscara de
+    anegamiento tiene poca área repartida a lo largo de todos los cauces: su
+    bbox cubre la región entera y no descarta nada (94% de los tramos lo
+    pasan), así que cada tramo termina intersectando la multigeometría
+    completa. Medido en Coquimbo con 23.076 tramos y 1.704 partes: 363 s.
+    Recortando contra las partes por separado el índice vuelve a emparejar
+    cada tramo solo con lo que tiene cerca: mismo resultado (1967.3 km), 20 s.
     """
-    afectadas = gpd.clip(vias, poligono)
+    if vias.empty:
+        return vias, 0.0
+    partes = gpd.GeoDataFrame(geometry=_partes(poligono), crs=vias.crs)
+    afectadas = gpd.overlay(vias, partes, how="intersection", keep_geom_type=True)
     if afectadas.empty:
         return afectadas, 0.0
     km = round(float(afectadas.to_crs(32719).geometry.length.sum() / 1000), 1)
