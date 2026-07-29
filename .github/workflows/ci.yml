@@ -28,9 +28,14 @@ jobs:
       - name: Instalar dependencias de runtime usadas por los módulos con test
         # Subconjunto de requirements.txt: solo lo que importan los módulos
         # cubiertos por tests/ (funciones puras). El resto del pipeline
-        # (pysheds, cfgrib/eccodes, herbie-data, osmnx, folium, …) depende de
-        # datos y librerías pesadas que tests/ deliberadamente no ejercita.
-        run: python -m pip install "numpy>=1.26" "pandas>=2.0" "rasterio>=1.3" "geopandas>=0.14" "shapely>=2.0" "PyYAML>=6.0" "requests>=2.31"
+        # (pysheds, cfgrib/eccodes, herbie-data, osmnx, …) depende de datos y
+        # librerías pesadas que tests/ deliberadamente no ejercita.
+        #
+        # folium y matplotlib entran porque mapa.py las importa a nivel de
+        # módulo y tests/test_mapa.py cubre sus funciones de leyenda. Al sumar
+        # un test que importa un módulo nuevo hay que revisar esta línea: acá
+        # falla por ImportError en la colección, no en el test.
+        run: python -m pip install "numpy>=1.26" "pandas>=2.0" "rasterio>=1.3" "geopandas>=0.14" "shapely>=2.0" "PyYAML>=6.0" "requests>=2.31" "folium>=0.16" "matplotlib>=3.8"
 
       - name: Tests con cobertura
         run: pytest --cov --cov-report=term-missing
