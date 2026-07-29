@@ -31,6 +31,7 @@ más viejos, para que el mapa publicado quede en el ciclo correcto).
 """
 
 import argparse
+import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -45,7 +46,20 @@ from inundaciones.mapa import generar_mapa
 from inundaciones.new_areas import identificar_zonas_nuevas
 from inundaciones.publicar import publicar_mapa
 from inundaciones.runoff import calcular_escorrentia
-from inundaciones.utils import cargar_config, log, mapas_de_ciclo
+from inundaciones.utils import cargar_config, log, mapas_de_ciclo, ruta_outputs
+
+
+def _activar_log_a_archivo(cfg: dict) -> Path:
+    """Agrega un FileHandler en outputs/<región>/logs/, igual que el wrapper
+    de cron de 04_proyectar.py (correr_proyeccion_gfs.sh), pero hecho en
+    Python porque este script se invoca a mano con argumentos variables
+    (--ciclo repetible) y no calza con un wrapper de argumentos fijos."""
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")
+    ruta = ruta_outputs(cfg, "logs", f"reprocesar_{ts}.log")
+    handler = logging.FileHandler(ruta, encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%H:%M:%S"))
+    log.addHandler(handler)
+    return ruta
 
 
 def _parse_ciclo(texto: str) -> datetime:
@@ -102,26 +116,34 @@ def main():
     args = parser.parse_args()
 
     cfg = cargar_config(args.config)
-    hechos, omitidos = 0, 0
-    for texto in args.ciclo:
-        ciclo = _parse_ciclo(texto)
-        previos = mapas_de_ciclo(cfg, "gfs", ciclo.isoformat())
-        if previos and not args.forzar:
-            # el nombre lleva timestamp de render: reprocesar agregaría un
-            # archivo más para el mismo ciclo, no lo reemplazaría
-            log.warning("Ciclo %s ya tiene %d mapa(s) en outputs/ (%s); lo omito. "
-                        "Usar --forzar para generar otro render de todos modos.",
-                        ciclo.isoformat(), len(previos), previos[-1].name)
-            omitidos += 1
-            continue
-        if previos:
-            log.warning("Ciclo %s ya tenía %d mapa(s); --forzar: se agrega otro render.",
-                        ciclo.isoformat(), len(previos))
-        reprocesar(cfg, ciclo, publicar=args.publicar,
-                   sin_exposicion=args.sin_exposicion)
-        hechos += 1
+    ruta_log = _activar_log_a_archivo(cfg)
+    log.info("== inicio == (log: %s)", ruta_log)
+    try:
+        hechos, omitidos = 0, 0
+        for texto in args.ciclo:
+            ciclo = _parse_ciclo(texto)
+            previos = mapas_de_ciclo(cfg, "gfs", ciclo.isoformat())
+            if previos and not args.forzar:
+                # el nombre lleva timestamp de render: reprocesar agregaría un
+                # archivo más para el mismo ciclo, no lo reemplazaría
+                log.warning("Ciclo %s ya tiene %d mapa(s) en outputs/ (%s); lo omito. "
+                            "Usar --forzar para generar otro render de todos modos.",
+                            ciclo.isoformat(), len(previos), previos[-1].name)
+                omitidos += 1
+                continue
+            if previos:
+                log.warning("Ciclo %s ya tenía %d mapa(s); --forzar: se agrega otro render.",
+                            ciclo.isoformat(), len(previos))
+            reprocesar(cfg, ciclo, publicar=args.publicar,
+                       sin_exposicion=args.sin_exposicion)
+            hechos += 1
 
-    log.info("Reprocesados %d ciclo(s), omitidos %d por mapa existente", hechos, omitidos)
+        log.info("Reprocesados %d ciclo(s), omitidos %d por mapa existente", hechos, omitidos)
+    except Exception:
+        log.exception("Corrida abortada por un error")
+        raise
+    finally:
+        log.info("== fin ==")
 
 
 if __name__ == "__main__":
