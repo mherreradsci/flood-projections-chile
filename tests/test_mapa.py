@@ -153,6 +153,29 @@ class TestCoherenciaConElOverlay:
         colores, _ = mapa._estilo_clases()
         assert len(colores) == len(mapa.PRECIPITACION_CLASES)
 
+
+class TestResponsive:
+    """En móvil las leyendas siguen al selector de capas."""
+
+    def test_la_regla_colapsado_vive_dentro_del_media_query(self):
+        css = mapa._estilos_responsive()
+        cuerpo = css.split("@media (max-width: 767px) {")[1]
+        # fuera del media query escondería las leyendas también en desktop
+        assert "#leyendas-mapa.colapsado { display: none; }" in cuerpo
+
+    def test_cada_cambio_de_estado_del_control_sincroniza(self):
+        # el invariante: si alguien agrega otro punto que toca
+        # leaflet-control-layers-expanded y olvida sincronizar, las barras
+        # quedan visibles con el selector cerrado (o al revés)
+        js = mapa._estilos_responsive().split("<script>")[1]
+        cambios = (js.count("classList.remove('leaflet-control-layers-expanded')")
+                   + js.count("classList.add('leaflet-control-layers-expanded')"))
+        assert cambios == js.count("sincronizarLeyendas();")
+
+    def test_el_estado_se_deriva_del_control_y_no_de_una_bandera(self):
+        js = mapa._estilos_responsive()
+        assert "classList.contains('leaflet-control-layers-expanded')" in js
+
     def test_barra_y_marcas_comparten_el_ancho(self):
         # escribir el ancho dos veces deja la marca derecha pasada del fin del
         # degradado: la fila de marcas la estira el título, más largo que la

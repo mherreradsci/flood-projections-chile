@@ -435,12 +435,26 @@ document.addEventListener('DOMContentLoaded', function () {{
 """
     mapa.get_root().html.add_child(folium.Element(sync_leyenda))
 
-    # En pantallas angostas (smartphone) la tarjeta de título y el selector de
-    # capas expandido tapan el mapa. Con collapsed=False Leaflet no instala los
-    # listeners de abrir/cerrar, así que se agrega un toggle propio: alternar la
-    # clase leaflet-control-layers-expanded reproduce el expandir/colapsar
-    # nativo. En desktop nada cambia (el media query no aplica).
-    responsive = """
+    mapa.get_root().html.add_child(folium.Element(_estilos_responsive()))
+
+    destino = ruta_outputs(
+        cfg, f"mapa_anegamientos_{sufijo}{tag}_{generado:%Y%m%d-%H%M%S}.html")
+    mapa.save(str(destino))
+    log.info("Mapa guardado: %s", destino)
+    return destino
+
+
+def _estilos_responsive() -> str:
+    """Adaptación a pantallas angostas (smartphone).
+
+    La tarjeta de título, el selector de capas expandido y las barras de
+    leyenda tapan el mapa. Con collapsed=False Leaflet no instala los listeners
+    de abrir/cerrar, así que se agrega un toggle propio: alternar la clase
+    leaflet-control-layers-expanded reproduce el expandir/colapsar nativo, y
+    las leyendas se enganchan a ese mismo estado. En desktop nada cambia (el
+    media query no aplica y el script corta al entrar).
+    """
+    return """
 <style>
 #titulo-flecha { display: none; }
 @media (max-width: 767px) {
@@ -464,6 +478,11 @@ document.addEventListener('DOMContentLoaded', function () {{
     --ancho-barra: 105px;   /* barra y marcas lo toman de acá */
   }
   .leyenda-mapa { padding: 4px 7px !important; }
+  /* con el selector de capas colapsado el mapa queda despejado: las barras
+     aparecen junto con la lista, que es justo cuando se está eligiendo qué
+     mirar. Gana sobre el `display:flex` del contenedor por especificidad
+     (id+clase), y al vivir dentro del media query no afecta al desktop. */
+  #leyendas-mapa.colapsado { display: none; }
 }
 </style>
 <script>
@@ -475,29 +494,34 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   var ctl = document.querySelector('.leaflet-control-layers');
   if (!ctl) return;
+  // Las barras de leyenda siguen al selector de capas: en un teléfono ocupan
+  // demasiado alto para estar siempre. Se deriva del estado real del control
+  // en vez de llevar una bandera aparte, así no pueden quedar desfasados.
+  var leyendas = document.getElementById('leyendas-mapa');
+  function sincronizarLeyendas() {
+    if (!leyendas) return;
+    leyendas.classList.toggle(
+      'colapsado', !ctl.classList.contains('leaflet-control-layers-expanded'));
+  }
   ctl.classList.remove('leaflet-control-layers-expanded');
+  sincronizarLeyendas();
   ctl.querySelector('.leaflet-control-layers-toggle')
      .addEventListener('click', function (e) {
         e.preventDefault();
         ctl.classList.add('leaflet-control-layers-expanded');
+        sincronizarLeyendas();
      });
   // tocar fuera del control lo vuelve a colapsar (los clicks dentro del
   // control no llegan aquí: Leaflet les corta la propagación)
   document.addEventListener('click', function (e) {
     if (!ctl.contains(e.target)) {
       ctl.classList.remove('leaflet-control-layers-expanded');
+      sincronizarLeyendas();
     }
   });
 });
 </script>
 """
-    mapa.get_root().html.add_child(folium.Element(responsive))
-
-    destino = ruta_outputs(
-        cfg, f"mapa_anegamientos_{sufijo}{tag}_{generado:%Y%m%d-%H%M%S}.html")
-    mapa.save(str(destino))
-    log.info("Mapa guardado: %s", destino)
-    return destino
 
 
 if __name__ == "__main__":
