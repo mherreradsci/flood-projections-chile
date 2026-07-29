@@ -20,6 +20,10 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python scripts/03_calibrar.py                   # → data/calibracion.json + outputs/calibracion_reporte.csv
 .venv/bin/python scripts/04_proyectar.py --fuente gfs     # también: ifs | escenario --escenario extremo_200mm
 
+# Poda de outputs/ (simula por default; --aplicar borra, y no hay vuelta atrás)
+.venv/bin/python scripts/05_limpiar_outputs.py --aplicar               # renders duplicados del mismo ciclo
+.venv/bin/python scripts/05_limpiar_outputs.py --conservar-ciclos 8 --aplicar   # además, poda ciclos viejos
+
 .venv/bin/ruff check .    # lint (config en pyproject.toml); --fix aplica lo autocorregible
 .venv/bin/pytest          # tests unitarios en tests/, sin datos reales (ver más abajo)
 ```
@@ -54,6 +58,7 @@ PYTHONPATH=src .venv/bin/python -c "from inundaciones.utils import cargar_config
 - **Caché por existencia de archivo:** los pasos costosos (HAND, descargas, huellas) devuelven temprano si su salida ya existe en `data/`. Para forzar un recálculo hay que borrar el archivo (p. ej. `data/dem/hand.tif` tras cambiar `umbral_drenaje_km2`). `data/` y `outputs/` están en `.gitignore`.
 - **Convención `sufijo`:** las salidas de `04_proyectar.py` se nombran por fuente de lluvia (`extension_gfs.tif`, `zonas_nuevas_extremo_200mm.geojson`, …), lo que permite mantener corridas GFS/IFS/escenario en paralelo. También `data/forecast/` es por sufijo (`precip_mm_<sufijo>.tif`, `meta_<sufijo>.json`, helpers `ingest_forecast.ruta_precip/ruta_meta`), así `generar_mapa`/`calcular_escorrentia` nunca mezclan la lluvia de una fuente con los rasters de otra. Los mapas HTML además llevan ciclo del pronóstico y timestamp.
 - **Publicación externa:** `04_proyectar.py` termina copiando el mapa a `publicacion/<region>/mapa_<sufijo>.html` (nombre estable, sobrescribe la corrida anterior de esa fuente) vía `publicar.publicar_mapa`, y mantiene `publicacion/manifest.json` — índice global con regiones e ítems (fuente, ciclo, acumulados) que consume el servicio de carrusel externo. `outputs/` sigue siendo el historial timestampeado; `publicacion/` está en `.gitignore`.
+- **Poda de `outputs/` (`limpieza.py` + `scripts/05_limpiar_outputs.py`):** el historial crece sin techo (~4 MB por HTML) y además acumula *duplicados por ciclo*, porque el nombre lleva ciclo **y** timestamp de render: volver a proyectar un ciclo agrega un archivo en vez de reemplazarlo. `reprocesar_ciclo_gfs.py` evita crearlos avisando, pero la ruta del cron (`04_proyectar.py`) no. La poda de duplicados no pierde información (los renders viejos del mismo ciclo son intentos superados); `--conservar-ciclos N` sí descarta historial, por eso es opt-in. Todo simula por default: `--aplicar` es obligatorio para borrar, ya que `outputs/` está en `.gitignore` y no se recupera. `limpieza.PATRON_MAPA` es la dirección inversa de `utils.ciclo_tag` — si se cambia el formato del tag hay que tocar ambos, y `tests/test_limpieza.py` los ata componiendo uno con otro.
 - **Contrato de huellas históricas:** cada evento de calibración termina como `data/historical/huella_<nombre>.tif` (máscara 0/1 en grilla DEM), sin importar si viene de GFD (MODIS) o Sentinel-1 (openEO). `huella_historica_union.tif` es la unión que usa `new_areas` para separar zonas nuevas de recurrentes.
 - **CI (`.github/workflows/ci.yml`):** en push/PR corre ruff + pytest y, solo en push a `main`, regenera `docs/coverage.svg` y lo commitea de vuelta con `[skip ci]` si cambió. GitHub matchea `[skip ci]` en todo el mensaje del commit (subject + body), no solo como directiva al inicio — evitar esa cadena literal en mensajes que describan el mecanismo en prosa, o el commit se autoexcluye de CI sin aviso (ya pasó una vez).
 
