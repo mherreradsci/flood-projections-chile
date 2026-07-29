@@ -9,6 +9,10 @@ evento de precipitación extrema (río atmosférico de julio 2026) y detectar lo
 código abierto y datos públicos. Multi-región: cada región es un archivo de
 configuración (ver [Multi-región](#multi-región)).
 
+**Este es un producto de susceptibilidad, no un mapa de certeza**: el modelo
+sobrepredice extensión a propósito (ver [Limitaciones](#limitaciones)) y no
+reemplaza los avisos oficiales de la DMC ni de SENAPRED.
+
 ![Mapa de proyección de anegamientos sobre Punitaqui: zonas nuevas en rojo y servicios críticos expuestos, sobre imagen satelital](docs/ejemplo_mapa_gfs.jpg)
 
 *Salida real del pipeline (GFS, ciclo 00 UTC del 17-jul-2026) sobre Punitaqui:
