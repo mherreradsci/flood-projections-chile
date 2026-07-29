@@ -7,6 +7,7 @@ se rompe en silencio — la leyenda queda linda pero miente sobre la capa.
 
 import re
 
+import numpy as np
 import pytest
 
 from inundaciones import mapa
@@ -54,30 +55,75 @@ class TestFmtMm:
         assert mapa._fmt_mm(valor) == esperado
 
 
+class TestEstiloClases:
+    def test_una_entrada_por_clase(self):
+        colores, alfas = mapa._estilo_clases()
+        assert len(colores) == len(mapa.PRECIPITACION_CLASES)
+        assert len(alfas) == len(mapa.PRECIPITACION_CLASES)
+
+    def test_alfa_de_la_clase_mas_baja_es_legible(self):
+        # el punto de las clases: una banda baja se ve aunque en otra región
+        # llueva 20 veces más. Con la rampa continua anterior daba ~0.01
+        _, alfas = mapa._estilo_clases()
+        assert alfas[0] == pytest.approx(mapa.PRECIPITACION_ALFA_MIN)
+        assert alfas[0] >= 0.3
+        assert alfas[-1] == pytest.approx(mapa.PRECIPITACION_OPACIDAD)
+
+    def test_no_arranca_en_el_blanco_del_colormap(self):
+        colores, _ = mapa._estilo_clases()
+        # la clase más baja debe tener color propio, no ser casi blanca
+        r, g, b, _ = colores[0]
+        assert min(r, g, b) < 0.92
+
+    def test_colores_distintos_entre_clases(self):
+        colores, _ = mapa._estilo_clases()
+        assert len({c[:3] for c in colores}) == len(colores)
+
+
+class TestParadasClases:
+    def test_bloques_macizos_de_igual_ancho(self):
+        colores, alfas = mapa._estilo_clases()
+        css = mapa._paradas_clases(colores, alfas)
+        assert css.count("rgba(") == len(colores)
+        # cortes duros: cada tramo declara inicio y fin, sin interpolar
+        assert css.count("%") == 2 * len(colores)
+
+    def test_cubre_de_0_a_100(self):
+        colores, alfas = mapa._estilo_clases()
+        css = mapa._paradas_clases(colores, alfas)
+        assert " 0.0000%" in css
+        assert "100.0000%" in css
+
+
 class TestLeyenda:
-    def test_incluye_las_tres_marcas(self):
-        html = mapa._leyenda("x", "T", "Blues", 0.0, 0.7, ("1.0", "31", "62"))
-        assert ">1.0<" in html and ">31<" in html and ">62<" in html
+    def test_incluye_todas_las_marcas(self):
+        html = mapa._leyenda("x", "T", "red 0% 100%", ["1", "5", "15"])
+        assert ">1<" in html and ">5<" in html and ">15<" in html
+
+    def test_modo_define_la_clase_css_de_las_marcas(self):
+        ext = mapa._leyenda("x", "T", "red 0% 100%", ["1", "2", "3"])
+        cls = mapa._leyenda("x", "T", "red 0% 100%", ["1", "2"], modo="clases")
+        assert "leyenda-marcas--extremos" in ext
+        assert "leyenda-marcas--clases" in cls
 
     def test_mostrar_false_arranca_oculta(self):
-        oculta = mapa._leyenda("x", "T", "Blues", 0.0, 0.7,
-                               ("1", "2", "3"), mostrar=False)
-        visible = mapa._leyenda("x", "T", "Blues", 0.0, 0.7, ("1", "2", "3"))
+        oculta = mapa._leyenda("x", "T", "red 0% 100%", ["1"], mostrar=False)
+        visible = mapa._leyenda("x", "T", "red 0% 100%", ["1"])
         assert "display:none" in oculta
         assert "display:none" not in visible
 
     def test_id_y_titulo_se_propagan(self):
         html = mapa._leyenda("leyenda-precipitacion", "Precipitación (72 h, mm)",
-                             "Blues", 0.0, 0.7, ("1", "2", "3"))
+                             "red 0% 100%", ["1"])
         assert "id='leyenda-precipitacion'" in html
         assert "Precipitación (72 h, mm)" in html
 
     def test_nota_opcional_va_como_title(self):
-        sin_nota = mapa._leyenda("x", "T", "Blues", 0.0, 0.7, ("1", "2", "3"))
-        con_nota = mapa._leyenda("x", "T", "Blues", 0.0, 0.7, ("1", "2", "3"),
-                                 nota="escala local")
+        sin_nota = mapa._leyenda("x", "T", "red 0% 100%", ["1"])
+        con_nota = mapa._leyenda("x", "T", "red 0% 100%", ["1"],
+                                 nota="escala fija")
         assert "title=" not in sin_nota
-        assert "title='escala local'" in con_nota
+        assert "title='escala fija'" in con_nota
 
 
 class TestCoherenciaConElOverlay:
@@ -88,9 +134,24 @@ class TestCoherenciaConElOverlay:
         assert "#leyendas-mapa" in css
         assert ".leyenda-barra" in css
 
-    def test_umbral_precipitacion_es_el_piso_de_la_barra(self):
-        # la marca izquierda rotula el umbral bajo el cual no se pinta nada
-        assert mapa._fmt_mm(mapa.PRECIPITACION_UMBRAL) == "1.0"
+    @pytest.mark.parametrize("mm,clase", [
+        (0.1, -1),    # bajo el primer corte: transparente
+        (0.9, -1),
+        (1.0, 0),     # el corte es el piso de su clase
+        (4.9, 0),
+        (15.6, 2),    # Atacama, GFS ciclo 12 del 29-07-2026
+        (42.2, 3),    # Coquimbo, mismo ciclo → clase distinta, como debe ser
+        (100.0, 4),   # escenario extremo_100mm
+        (315.9, 5),   # IFS: cae en la clase abierta
+    ])
+    def test_los_cortes_separan_los_casos_reales(self, mm, clase):
+        # es la misma cuenta que hace _overlay; si los cortes se tocan sin
+        # mirar, dos regiones muy distintas pueden caer en la misma banda
+        assert np.digitize(mm, mapa.PRECIPITACION_CLASES) - 1 == clase
+
+    def test_hay_una_marca_por_clase(self):
+        colores, _ = mapa._estilo_clases()
+        assert len(colores) == len(mapa.PRECIPITACION_CLASES)
 
     def test_barra_y_marcas_comparten_el_ancho(self):
         # escribir el ancho dos veces deja la marca derecha pasada del fin del

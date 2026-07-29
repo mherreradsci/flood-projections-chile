@@ -39,17 +39,34 @@ PROFUNDIDAD_UMBRAL = 0.05   # = flood_model.PROFUNDIDAD_MIN_M
 PROFUNDIDAD_ALFA_MIN = 0.22
 PROFUNDIDAD_OPACIDAD = 0.65
 
-# Ídem para la capa de lluvia. A diferencia de profundidad, su vmax NO es
-# constante: `_overlay` lo autoescala al máximo regional del ciclo, así que la
-# leyenda se arma con el valor que devuelve el overlay y no con una constante.
-# Sin números impresos, dos regiones del mismo ciclo se ven iguales con
-# acumulados muy distintos (Atacama 11 mm y Coquimbo 62 mm el 29-07-2026 se
-# dibujaban ambas con el mismo azul saturado a cada lado del límite regional).
+# La capa de lluvia NO se autoescala: usa clases fijas en mm, iguales en todo
+# mapa. Con vmax autoescalado al máximo regional, dos regiones del mismo ciclo
+# se dibujaban con el mismo azul saturado teniendo acumulados muy distintos
+# (Atacama 11 mm y Coquimbo 62 mm el 29-07-2026, a cada lado del límite), y un
+# escenario de 200 mm se veía igual que un GFS de 15 mm en el carrusel.
+#
+# Compartir un vmax por ciclo no alcanzaba: el castigo es doble porque el mismo
+# valor normalizado elige el color Y el alfa, así que la región seca queda
+# pálida y transparente a la vez (Atacama 15.6 mm sobre vmax 42.2 → alfa 0.26,
+# y 0.13 con el ciclo de las 06). Las clases desacoplan ambas cosas: cada banda
+# tiene color y alfa propios, así 3 mm se ven aunque en otra región llueva 300.
+#
+# Van como constante de módulo y no en config.yaml a propósito: el sentido de
+# la escala es ser idéntica entre regiones, y un parámetro por región la
+# rompería. Es la misma razón por la que PROFUNDIDAD_VMAX tampoco es de config.
 CAPA_PRECIPITACION = "Precipitación pronosticada (mm)"
-PRECIPITACION_CMAP = "Blues"
-PRECIPITACION_UMBRAL = 1.0
-PRECIPITACION_ALFA_MIN = 0.0
-PRECIPITACION_OPACIDAD = 0.7
+PRECIPITACION_CMAP = "BuPu"
+# cortes en mm/72 h: cada valor es el piso de su clase; la última es abierta.
+# Cubren el rango observado (GFS 15.6 → IFS 315.9) sin que la región seca
+# caiga toda en la primera banda. Bajo el primer corte no se pinta nada.
+PRECIPITACION_CLASES = [1, 5, 15, 30, 60, 120]
+# el alfa arranca alto para que la banda más baja se lea sobre el satelital;
+# sube poco, para que los núcleos resalten sin tapar el fondo
+PRECIPITACION_ALFA_MIN = 0.40
+PRECIPITACION_OPACIDAD = 0.75
+# la rampa BuPu arranca casi blanca: se muestrea desde 0.25 para que la clase
+# más baja tenga color propio en vez de ser un tinte
+PRECIPITACION_CMAP_DESDE = 0.25
 
 
 def _leer_reducido(ruta: Path, max_px: int = MAX_PIXELES_OVERLAY
@@ -73,11 +90,25 @@ def _leer_reducido(ruta: Path, max_px: int = MAX_PIXELES_OVERLAY
 
 def _overlay(mapa, ruta, nombre, cmap, vmax=None, opacidad=0.65, mostrar=True,
              umbral=0.0, gradual=False, alfa_min=0.0,
-             max_px=MAX_PIXELES_OVERLAY):
+             max_px=MAX_PIXELES_OVERLAY, clases=None):
     datos, bounds = _leer_reducido(ruta, max_px)
     vmax = vmax or float(np.nanmax(datos)) or 1.0
-    norm = matplotlib.colors.Normalize(vmin=0, vmax=vmax)
     valores = np.nan_to_num(datos)
+    if clases:
+        # escala discreta: el valor cae en una banda y toma su color y alfa,
+        # sin depender del máximo del ráster. `digitize` devuelve 0 para lo que
+        # está bajo el primer corte, que queda transparente.
+        colores, alfas = _estilo_clases(cmap, len(clases), alfa_min, opacidad)
+        idx = np.digitize(valores, clases) - 1
+        rgba = np.zeros(valores.shape + (4,))
+        for i, ((r, g, b, _), a) in enumerate(zip(colores, alfas, strict=True)):
+            rgba[idx == i] = (r, g, b, a)
+        folium.raster_layers.ImageOverlay(
+            image=rgba, bounds=bounds, name=nombre, show=mostrar, zindex=2,
+            mercator_project=True,
+        ).add_to(mapa)
+        return vmax
+    norm = matplotlib.colors.Normalize(vmin=0, vmax=vmax)
     rgba = matplotlib.colormaps[cmap](norm(valores))
     if gradual:
         # transparencia proporcional a la intensidad: no tapa el fondo.
@@ -97,6 +128,40 @@ def _overlay(mapa, ruta, nombre, cmap, vmax=None, opacidad=0.65, mostrar=True,
         mercator_project=True,
     ).add_to(mapa)
     return vmax
+
+
+def _estilo_clases(cmap: str = PRECIPITACION_CMAP,
+                   n: int = len(PRECIPITACION_CLASES),
+                   alfa_min: float = PRECIPITACION_ALFA_MIN,
+                   opacidad: float = PRECIPITACION_OPACIDAD,
+                   desde: float = PRECIPITACION_CMAP_DESDE
+                   ) -> tuple[list[tuple], list[float]]:
+    """Color y alfa de cada clase: la usan el ráster y la leyenda.
+
+    Es el punto único donde se decide cómo se ve una clase; si el overlay y la
+    barra los calcularan por separado, la leyenda podría mentir sobre el mapa.
+    """
+    colores, alfas = [], []
+    for i in range(n):
+        t = i / (n - 1)
+        colores.append(matplotlib.colormaps[cmap](desde + (1 - desde) * t))
+        alfas.append(alfa_min + (opacidad - alfa_min) * t)
+    return colores, alfas
+
+
+def _paradas_clases(colores: list[tuple], alfas: list[float]) -> str:
+    """Degradado CSS escalonado: cada clase un bloque macizo de igual ancho.
+
+    Sin los cortes duros el ojo interpola entre clases y la barra deja de
+    describir una escala discreta.
+    """
+    n = len(colores)
+    tramos = []
+    for i, ((r, g, b, _), a) in enumerate(zip(colores, alfas, strict=True)):
+        ini, fin = 100 * i / n, 100 * (i + 1) / n
+        css = f"rgba({round(r * 255)},{round(g * 255)},{round(b * 255)},{a:.2f})"
+        tramos.append(f"{css} {ini:.4f}% {fin:.4f}%")
+    return ", ".join(tramos)
 
 
 def _paradas_gradiente(cmap: str, alfa_min: float, opacidad: float,
@@ -127,30 +192,33 @@ def _fmt_mm(v: float) -> str:
     return f"{v:.0f}" if abs(v) >= 10 else f"{v:.1f}"
 
 
-def _leyenda(id_html: str, titulo: str, cmap: str, alfa_min: float,
-             opacidad: float, etiquetas: tuple[str, str, str],
-             mostrar: bool = True, nota: str = "") -> str:
+def _leyenda(id_html: str, titulo: str, gradiente: str, marcas: list[str],
+             modo: str = "extremos", mostrar: bool = True,
+             nota: str = "") -> str:
     """Barra de color flotante de una capa ráster.
 
-    `etiquetas` son las marcas izquierda/centro/derecha ya formateadas: cada
-    capa decide cómo rotularlas (profundidad clampea en su vmax y escribe
-    '≥3'; lluvia autoescala al máximo real y no clampea nada). El fondo va a
-    cuadros claros porque la rampa es semitransparente y sobre blanco puro los
-    valores bajos no se distinguen.
+    Dos modos, según cómo se rotula la barra:
+
+    - `extremos`: tres marcas (piso / medio / techo) para una rampa continua.
+      Cada capa decide el texto — profundidad clampea en su vmax y escribe
+      '≥3'.
+    - `clases`: una marca por banda, alineada al borde izquierdo de su bloque,
+      porque en una escala discreta el número es el piso de la clase y no un
+      punto de la rampa.
+
+    El fondo va a cuadros claros porque la rampa es semitransparente y sobre
+    blanco puro los valores bajos no se distinguen.
     """
-    gradiente = ", ".join(_paradas_gradiente(cmap, alfa_min, opacidad))
-    izq, centro, der = etiquetas
     oculto = "" if mostrar else "display:none;"
     attr_nota = f" title='{nota}'" if nota else ""
+    spans = "".join(f"<span>{m}</span>" for m in marcas)
     return f"""
 <div class='leyenda-mapa' id='{id_html}' style='{oculto}'>
   <div class='leyenda-titulo'>{titulo}</div>
   <div class='leyenda-barra'{attr_nota}
        style='background-image:linear-gradient(to right, {gradiente}),
          repeating-conic-gradient(#fff 0% 25%, #d8d8d8 0% 50%)'></div>
-  <div class='leyenda-marcas'>
-    <span>{izq}</span><span>{centro}</span><span>{der}</span>
-  </div>
+  <div class='leyenda-marcas leyenda-marcas--{modo}'>{spans}</div>
 </div>
 """
 
@@ -189,13 +257,18 @@ def _estilos_leyendas() -> str:
 .leyenda-marcas {
   display: flex; width: var(--ancho-barra); color: #444; margin-top: 2px;
 }
-/* tercios iguales en vez de space-between: con etiquetas de ancho distinto
-   ('1.0' vs '16') space-between descentra la del medio respecto del 50% de
-   la barra. Los extremos van pegados a los bordes para no desbordarla. */
+/* celdas iguales en vez de space-between: con etiquetas de ancho distinto
+   ('1.0' vs '16') space-between descentra las del medio respecto de la barra */
 .leyenda-marcas span { flex: 1 1 0; }
-.leyenda-marcas span:first-child { text-align: left; }
-.leyenda-marcas span:nth-child(2) { text-align: center; }
-.leyenda-marcas span:last-child { text-align: right; }
+/* rampa continua: piso, medio y techo, con los extremos pegados a los bordes
+   para no desbordar la barra */
+.leyenda-marcas--extremos span:first-child { text-align: left; }
+.leyenda-marcas--extremos span:nth-child(2) { text-align: center; }
+.leyenda-marcas--extremos span:last-child { text-align: right; }
+/* escala discreta: cada número es el piso de su clase, así que va alineado al
+   borde izquierdo del bloque que rotula */
+.leyenda-marcas--clases { font-size: 0.85em; }
+.leyenda-marcas--clases span { text-align: left; }
 </style>
 """
 
@@ -226,14 +299,12 @@ def generar_mapa(cfg: dict, sufijo: str | None = None) -> Path:
     folium.TileLayer("cartodbpositron", name="Fondo claro (Carto)",
                      show=False).add_to(mapa)
 
-    # precipitación (alfa gradual: los núcleos intensos resaltan, el resto
-    # deja ver el mapa base). vmax queda autoescalado al máximo regional y se
-    # captura para rotular la leyenda con el mismo valor que se dibujó.
-    precip_vmax = _overlay(
-        mapa, ingest_forecast.ruta_precip(cfg, sufijo),
-        CAPA_PRECIPITACION, PRECIPITACION_CMAP,
-        opacidad=PRECIPITACION_OPACIDAD, mostrar=False,
-        umbral=PRECIPITACION_UMBRAL, gradual=True, max_px=max_px)
+    # precipitación en clases fijas: el color de una celda depende solo de sus
+    # mm, no del máximo de la región ni del ciclo
+    _overlay(mapa, ingest_forecast.ruta_precip(cfg, sufijo),
+             CAPA_PRECIPITACION, PRECIPITACION_CMAP,
+             clases=PRECIPITACION_CLASES, alfa_min=PRECIPITACION_ALFA_MIN,
+             opacidad=PRECIPITACION_OPACIDAD, mostrar=False, max_px=max_px)
     # profundidad proyectada: alfa gradual con piso, para que las láminas
     # delgadas (la mayoría de las celdas) tiñan el fondo en vez de taparlo
     _overlay(mapa, ruta_outputs(cfg, f"profundidad_{sufijo}.tif"),
@@ -320,18 +391,21 @@ def generar_mapa(cfg: dict, sufijo: str | None = None) -> Path:
     # no se mueva cuando se prende la de lluvia, que aparece encima).
     leyenda_profundidad = _leyenda(
         "leyenda-profundidad", "Profundidad anegamiento (m)",
-        PROFUNDIDAD_CMAP, PROFUNDIDAD_ALFA_MIN, PROFUNDIDAD_OPACIDAD,
-        (f"{PROFUNDIDAD_UMBRAL:g}", f"{PROFUNDIDAD_VMAX / 2:g}",
-         f"&ge;{PROFUNDIDAD_VMAX:g}"))
+        ", ".join(_paradas_gradiente(PROFUNDIDAD_CMAP, PROFUNDIDAD_ALFA_MIN,
+                                     PROFUNDIDAD_OPACIDAD)),
+        [f"{PROFUNDIDAD_UMBRAL:g}", f"{PROFUNDIDAD_VMAX / 2:g}",
+         f"&ge;{PROFUNDIDAD_VMAX:g}"])
     # la de lluvia arranca oculta: su capa se agrega con mostrar=False
+    colores, alfas = _estilo_clases()
     leyenda_precip = _leyenda(
         "leyenda-precipitacion", f"Precipitación ({meta['horas']} h, mm)",
-        PRECIPITACION_CMAP, PRECIPITACION_ALFA_MIN, PRECIPITACION_OPACIDAD,
-        (_fmt_mm(PRECIPITACION_UMBRAL), _fmt_mm(precip_vmax / 2),
-         _fmt_mm(precip_vmax)),
+        _paradas_clases(colores, alfas),
+        # los cortes son enteros: '5' y no '5.0', que además ocupa menos en la
+        # fila de 6 marcas
+        [f"{c:g}" for c in PRECIPITACION_CLASES], modo="clases",
         mostrar=False,
-        nota="Escala ajustada al máximo de esta región y ciclo: "
-             "los colores no son comparables entre regiones.")
+        nota="Escala fija: los colores significan los mismos mm en toda "
+             "región, ciclo y escenario.")
     mapa.get_root().html.add_child(folium.Element(_estilos_leyendas()))
     mapa.get_root().html.add_child(folium.Element(
         f"<div id='leyendas-mapa'>{leyenda_profundidad}{leyenda_precip}</div>"))
