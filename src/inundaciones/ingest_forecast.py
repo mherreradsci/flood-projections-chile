@@ -226,12 +226,20 @@ def descargar_gfs(cfg: dict) -> tuple[Path, dict]:
     return destino, meta
 
 
-def descargar_ifs(cfg: dict) -> tuple[Path, dict]:
+def descargar_ifs(cfg: dict, ciclo: datetime | None = None) -> tuple[Path, dict]:
     """ECMWF IFS open-data 0.25°: tp acumulado a N horas + isoterma 0.
 
     En IFS open-data `tp` viene acumulado desde la inicialización, así que
     basta el paso final. La isoterma 0 se interpola del perfil medio t/gh en
     niveles de presión (el open-data no publica el nivel de congelación).
+
+    `ciclo`: si se pasa, fuerza esa fecha/hora en vez de "la más reciente"
+    (usado por `reprocesar_ciclo_ifs.py` para backfill). A diferencia de GFS
+    —donde "más reciente" es una heurística nuestra y forzar un ciclo
+    puntual requiere monkeypatchear `_ciclo_gfs_para_descarga`— el cliente de
+    ECMWF acepta `date`/`time` explícitos de forma nativa; el open-data solo
+    retiene ~3-4 días, así que un ciclo fuera de esa ventana falla con 404
+    igual que uno inexistente.
     """
     import xarray as xr
     from ecmwf.opendata import Client
@@ -239,9 +247,10 @@ def descargar_ifs(cfg: dict) -> tuple[Path, dict]:
     horas = int(cfg["pronostico"]["horas"])
     o, s, e, n = cfg["region"]["bbox"]
     cliente = Client(source="ecmwf", model="ifs", resol="0p25")
+    kwargs = {"date": ciclo.strftime("%Y%m%d"), "time": ciclo.hour} if ciclo else {}
 
     tmp_tp = ruta_data(cfg, "forecast", "ifs_tp.grib2")
-    r = cliente.retrieve(type="fc", param="tp", step=horas, target=str(tmp_tp))
+    r = cliente.retrieve(type="fc", param="tp", step=horas, target=str(tmp_tp), **kwargs)
     ciclo = r.datetime
 
     ds = xr.open_dataset(tmp_tp, engine="cfgrib",
@@ -263,7 +272,7 @@ def descargar_ifs(cfg: dict) -> tuple[Path, dict]:
     try:
         tmp_pl = ruta_data(cfg, "forecast", "ifs_pl.grib2")
         cliente.retrieve(type="fc", param=["t", "gh"], levelist=[1000, 925, 850, 700, 500],
-                         step=horas // 2, target=str(tmp_pl))
+                         step=horas // 2, target=str(tmp_pl), **kwargs)
         dpl = xr.open_dataset(tmp_pl, engine="cfgrib",
                               backend_kwargs={"indexpath": ""})
         lons_pl = dpl.longitude.values
