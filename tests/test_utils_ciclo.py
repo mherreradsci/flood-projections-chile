@@ -6,9 +6,11 @@ nombre que escribe `mapa.generar_mapa`, el detector deja de ver duplicados
 en silencio. Por eso se prueba contra archivos con el nombre real.
 """
 
+from datetime import datetime, timezone
+
 import pytest
 
-from inundaciones.utils import ciclo_tag, mapas_de_ciclo
+from inundaciones.utils import ciclo_tag, mapas_de_ciclo, validar_ciclo_no_futuro
 
 
 @pytest.mark.parametrize("iso,esperado", [
@@ -84,3 +86,18 @@ def test_mapas_de_ciclo_vacio_para_escenario_sin_ciclo(tmp_path, monkeypatch):
     _preparar(tmp_path, monkeypatch, [
         "mapa_anegamientos_gfs_20260718_06utc_20260718-100049.html"])
     assert mapas_de_ciclo(_cfg(tmp_path), "extremo_200mm", None) == []
+
+
+def test_validar_ciclo_no_futuro_rechaza_ciclo_posterior_a_ahora():
+    """Un --ciclo de mañana no puede haberse generado; cortar sin pegarle a la red."""
+    ahora = datetime(2026, 7, 30, 12, 0, tzinfo=timezone.utc)
+    futuro = datetime(2026, 7, 31, 0, 0, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="futuro"):
+        validar_ciclo_no_futuro(futuro, ahora=ahora)
+
+
+def test_validar_ciclo_no_futuro_acepta_ciclo_pasado_o_actual():
+    ahora = datetime(2026, 7, 30, 12, 0, tzinfo=timezone.utc)
+    pasado = datetime(2026, 7, 30, 6, 0, tzinfo=timezone.utc)
+    validar_ciclo_no_futuro(pasado, ahora=ahora)
+    validar_ciclo_no_futuro(ahora, ahora=ahora)  # límite exacto: no es futuro

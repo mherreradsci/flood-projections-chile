@@ -74,6 +74,22 @@ def ruta_salida(cfg: dict, sufijo: str, *partes: str) -> Path:
     return ruta_outputs(cfg, carpeta_fuente(sufijo), *partes)
 
 
+def validar_ciclo_no_futuro(ciclo: datetime, ahora: datetime | None = None) -> None:
+    """Rechaza un `--ciclo` de backfill que todavía no pudo generarse.
+
+    A diferencia del 404 por publicación tardía (que solo se sabe pegándole
+    a la red, porque ECMWF/NOAA no tienen horario fijo), un ciclo futuro es
+    detectable sin red: si `ciclo` es posterior a `ahora`, el modelo
+    meteorológico que lo produciría ni se corrió todavía. Cortarlo acá evita
+    gastar la descarga completa para terminar en el mismo `HTTPError 404`.
+    `ahora` es inyectable para test; por default es la hora real UTC.
+    """
+    ahora = ahora or datetime.now(timezone.utc)
+    if ciclo > ahora:
+        raise ValueError(
+            f"ciclo {ciclo.isoformat()} está en el futuro (ahora: {ahora.isoformat()})")
+
+
 def ciclo_tag(ciclo_iso: str | None) -> str:
     """Sufijo `_YYYYMMDD_HHutc` que identifica el ciclo en el nombre del mapa.
 

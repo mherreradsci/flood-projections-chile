@@ -66,7 +66,13 @@ from inundaciones.mapa import generar_mapa
 from inundaciones.new_areas import identificar_zonas_nuevas
 from inundaciones.publicar import publicar_mapa
 from inundaciones.runoff import calcular_escorrentia
-from inundaciones.utils import activar_log_a_archivo, cargar_config, log, mapas_de_ciclo
+from inundaciones.utils import (
+    activar_log_a_archivo,
+    cargar_config,
+    log,
+    mapas_de_ciclo,
+    validar_ciclo_no_futuro,
+)
 
 
 def _parse_ciclo(texto: str) -> datetime:
@@ -127,6 +133,7 @@ def main():
         hechos, omitidos = 0, 0
         for texto in args.ciclo:
             ciclo = _parse_ciclo(texto)
+            validar_ciclo_no_futuro(ciclo)
             previos = mapas_de_ciclo(cfg, "ifs", ciclo.isoformat())
             if previos and not args.forzar:
                 log.warning("Ciclo %s ya tiene %d mapa(s) en outputs/ (%s); lo omito. "
