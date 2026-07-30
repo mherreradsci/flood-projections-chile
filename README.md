@@ -147,28 +147,52 @@ archivo ordena por ciclo) más GeoTIFF/GeoJSON en `outputs/<region>/` (p. ej. `o
 
 ### Corridas programadas (cron)
 
-`scripts/correr_proyeccion_gfs.sh` es el wrapper para cron/systemd: rutas
-absolutas, candado `flock` contra corridas solapadas y log por corrida en
-`outputs/coquimbo/logs/proyeccion_<timestamp>.log`.
+`scripts/correr_proyeccion_{,atacama_}{gfs,ifs}.sh` son los wrappers para
+cron/systemd (uno por región × fuente): rutas absolutas, candado `flock`
+contra corridas solapadas y log por corrida en
+`outputs/<region>/logs/proyeccion_{gfs,ifs}_<timestamp>.log`.
 
-Las horas de ejecución deben seguir la publicación de GFS: cada ciclo (00, 06,
-12, 18 UTC) completa su horizonte de 72 h ~4 h después de la hora del ciclo.
-El pipeline sondea NOAA y descarga el ciclo más reciente ya completo (con la
-heurística de rezago fijo de 5 h solo como respaldo si el sondeo falla), así
-que basta programar las corridas después de ese punto: en Chile continental en
-invierno (UTC−4), a las 01:00, 07:00, 13:00 y 19:00 locales — cada una toma el
-ciclo recién completado. Ejemplo usado durante el evento de julio 2026
-(días 16–21, con guardia de año y entrada de autolimpieza que el último día se
-borra a sí misma y a la de corridas):
+Las horas de ejecución deben seguir la publicación de cada fuente. Cada
+ciclo (00, 06, 12, 18 UTC) tarda en estar listo: GFS completa su horizonte de
+72 h ~4 h después de la hora del ciclo; IFS 0.25° open-data tarda más,
+~6.5 h (medido 2026-07-30: el ciclo 06z quedó publicado a las 12:27 UTC). En
+ambos casos el pipeline resuelve solo "el ciclo más reciente" con su propio
+mecanismo de reintento (`sondear_ciclos_gfs` para GFS, `Client.latest()` de
+`ecmwf-opendata` para IFS) y cae al ciclo anterior si el más nuevo no está
+listo — **la corrida recurrente nunca falla por esto**, el horario del cron
+solo decide qué tan fresco es el dato que trae.
+
+**Ojo con la zona horaria:** cron corre en la hora local del sistema
+(`America/Santiago`, verificar con `timedatectl`), no en UTC — las horas de
+abajo (1, 7, 13, 19 locales) equivalen a UTC 5, 11, 17, 23 en horario de
+invierno (UTC−4), es decir ciclo+5h. Con eso, IFS ya queda con ~4.5 h de
+margen sobre el retraso medido; no hace falta ni conviene acercar más el
+horario a la hora de publicación real (el margen se reduce a minutos y
+cualquier día que ECMWF se demore un poco más, sale 404).
+
+Ejemplo vigente (agosto 2026, con guardia de año y entradas de autolimpieza
+que se borran a sí mismas y a las de corridas el 31 de agosto):
 
 ```cron
-0 1,7,13,19 16-21 7 * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_gfs.sh # proyeccion-gfs-jul2026
-30 19 21 7 * crontab -l | grep -v proyeccion-gfs-jul2026 | crontab - # proyeccion-gfs-jul2026
+0 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_gfs.sh # proyeccion-gfs-ago2026
+15 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_atacama_gfs.sh # proyeccion-atacama-gfs-ago2026
+30 19 31 8 * crontab -l | grep -v proyeccion-gfs-ago2026 | crontab - # proyeccion-gfs-ago2026
+45 19 31 8 * crontab -l | grep -v proyeccion-atacama-gfs-ago2026 | crontab - # proyeccion-atacama-gfs-ago2026
 
-30 1,7,13,19 16-21 7 * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_atacama_gfs.sh # proyeccion-atacama-gfs-jul2026
-45 19 21 7 * crontab -l |  grep -v proyeccion-atacama-gfs-jul2026 | crontab - # proyeccion-atacama-gfs-jul2026
-
+30 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_ifs.sh # proyeccion-ifs-ago2026
+45 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_atacama_ifs.sh # proyeccion-atacama-ifs-ago2026
+50 19 31 8 * crontab -l | grep -v proyeccion-ifs-ago2026 | crontab - # proyeccion-ifs-ago2026
+55 19 31 8 * crontab -l | grep -v proyeccion-atacama-ifs-ago2026 | crontab - # proyeccion-atacama-ifs-ago2026
 ```
+
+Backfill puntual de un ciclo exacto (huecos por caída del cron, o para
+rellenar historia): `scripts/reprocesar_ciclo_gfs.py` y
+`scripts/reprocesar_ciclo_ifs.py`, misma interfaz `--ciclo` (repetible)
+`[--config config_atacama.yaml] [--publicar] [--forzar]`, ver ejemplo de GFS
+más arriba (sección [Multi-región](#multi-región)). A diferencia de la
+corrida recurrente, estos SÍ pueden fallar con
+`HTTPError 404` si se pide un ciclo de IFS/GFS del día antes de que la fuente
+lo publique, o un ciclo futuro (este último se corta antes de tocar red).
 
 ## Datos usados (todos públicos)
 
