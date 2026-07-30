@@ -371,6 +371,10 @@ def generar_mapa(cfg: dict, sufijo: str | None = None) -> Path:
         fuente_txt = (f"Fuente lluvia: {meta['fuente'].upper()} "
                       f"{ciclo_dt:%d-%m-%Y} (ciclo {ciclo_dt:%H} UTC) | "
                       f"acumulado {acum} mm en {meta['horas']} h")
+        # NOAA/GFS es dominio público y no pide atribución; ECMWF/IFS sí la
+        # exige bajo CC BY 4.0 en cada descarga de su open-data.
+        if meta["fuente"] == "ifs":
+            fuente_txt += " | datos © ECMWF (CC BY 4.0)"
     else:
         fuente_txt = (f"Escenario sintético: {meta['precip_max_mm']} mm / "
                       f"{meta['horas']} h uniformes (no depende de ciclo GFS)")

@@ -207,6 +207,11 @@ lo publique, o un ciclo futuro (este último se corta antes de tocar red).
 | Límite regional | OpenStreetMap (Nominatim) |
 | Exposición | OpenStreetMap (Overpass vía `osmnx`) |
 
+El pronóstico IFS es [ECMWF open data](https://www.ecmwf.int/en/forecasts/datasets/open-data)
+bajo licencia [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), que
+exige atribución — el título de cada mapa generado con `--fuente ifs` la
+incluye (`datos © ECMWF`). GFS es dominio público (NOAA) y no la requiere.
+
 ## Limitaciones
 
 - GFS 25 km es grueso para quebradas costeras; usar el modo escenario para
