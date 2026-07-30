@@ -12,7 +12,7 @@ import numpy as np
 from rasterio.transform import Affine
 
 from inundaciones.new_areas import identificar_zonas_nuevas
-from inundaciones.utils import guardar_raster, leer_raster
+from inundaciones.utils import guardar_raster, leer_raster, ruta_salida
 
 TRANSFORM = Affine(0.001, 0.0, -71.0, 0.0, -0.001, -30.0)
 
@@ -36,7 +36,7 @@ def test_separa_nuevas_de_recurrentes_y_descarta_ruido(tmp_path):
     historico[6:10, 5:10] = 1
 
     cfg = _cfg(tmp_path)
-    guardar_raster(tmp_path / "outputs" / "extension_test.tif", extension, TRANSFORM,
+    guardar_raster(ruta_salida(cfg, "test", "extension_test.tif"), extension, TRANSFORM,
                    nodata=255, dtype="uint8")
     guardar_raster(tmp_path / "data" / "historical" / "huella_historica_union.tif",
                    historico, TRANSFORM, nodata=255, dtype="uint8")
@@ -50,7 +50,7 @@ def test_separa_nuevas_de_recurrentes_y_descarta_ruido(tmp_path):
     assert len(recurrentes_gdf) == 1
 
     # el raster (a diferencia del vector) no se filtra por área: conserva el ruido
-    nuevas_raster, _, _ = leer_raster(tmp_path / "outputs" / "zonas_nuevas_test.tif")
-    recurrentes_raster, _, _ = leer_raster(tmp_path / "outputs" / "zonas_recurrentes_test.tif")
+    nuevas_raster, _, _ = leer_raster(ruta_salida(cfg, "test", "zonas_nuevas_test.tif"))
+    recurrentes_raster, _, _ = leer_raster(ruta_salida(cfg, "test", "zonas_recurrentes_test.tif"))
     assert int(nuevas_raster.sum()) == 17  # bloque A (16) + ruido (1)
     assert int(recurrentes_raster.sum()) == 16  # solo la intersección anegada ∩ huella

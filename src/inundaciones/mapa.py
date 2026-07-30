@@ -16,7 +16,7 @@ import rasterio
 from rasterio.warp import Resampling
 
 from . import ingest_forecast
-from .utils import cargar_config, ciclo_tag, log, ruta_data, ruta_outputs
+from .utils import cargar_config, ciclo_tag, log, ruta_data, ruta_salida
 
 # Lado mayor de los PNG embebidos en el HTML. Por defecto alcanza para que
 # ambas regiones se dibujen a resolución nativa del DEM (Coquimbo 4454,
@@ -307,7 +307,7 @@ def generar_mapa(cfg: dict, sufijo: str | None = None) -> Path:
              opacidad=PRECIPITACION_OPACIDAD, mostrar=False, max_px=max_px)
     # profundidad proyectada: alfa gradual con piso, para que las láminas
     # delgadas (la mayoría de las celdas) tiñan el fondo en vez de taparlo
-    _overlay(mapa, ruta_outputs(cfg, f"profundidad_{sufijo}.tif"),
+    _overlay(mapa, ruta_salida(cfg, sufijo, f"profundidad_{sufijo}.tif"),
              CAPA_PROFUNDIDAD, PROFUNDIDAD_CMAP, vmax=PROFUNDIDAD_VMAX,
              umbral=PROFUNDIDAD_UMBRAL, gradual=True,
              alfa_min=PROFUNDIDAD_ALFA_MIN, opacidad=PROFUNDIDAD_OPACIDAD,
@@ -320,7 +320,7 @@ def generar_mapa(cfg: dict, sufijo: str | None = None) -> Path:
                  max_px=max_px)
 
     # zonas nuevas (lo central del análisis) en rojo
-    ruta_nuevas = ruta_outputs(cfg, f"zonas_nuevas_{sufijo}.geojson")
+    ruta_nuevas = ruta_salida(cfg, sufijo, f"zonas_nuevas_{sufijo}.geojson")
     if ruta_nuevas.exists():
         nuevas = gpd.read_file(ruta_nuevas)
         if not nuevas.empty:
@@ -333,7 +333,7 @@ def generar_mapa(cfg: dict, sufijo: str | None = None) -> Path:
             ).add_to(mapa)
 
     # exposición
-    ruta_exp = ruta_outputs(cfg, f"exposicion_{sufijo}.json")
+    ruta_exp = ruta_salida(cfg, sufijo, f"exposicion_{sufijo}.json")
     if ruta_exp.exists():
         exp = json.loads(ruta_exp.read_text())
         capa_serv = folium.FeatureGroup(name="Servicios críticos expuestos")
@@ -344,7 +344,7 @@ def generar_mapa(cfg: dict, sufijo: str | None = None) -> Path:
                 icon=folium.Icon(color="red", icon="warning-sign"),
             ).add_to(capa_serv)
         capa_serv.add_to(mapa)
-        ruta_vias = ruta_outputs(cfg, f"vias_expuestas_{sufijo}.geojson")
+        ruta_vias = ruta_salida(cfg, sufijo, f"vias_expuestas_{sufijo}.geojson")
         if ruta_vias.exists():
             vias = gpd.read_file(ruta_vias)
             if not vias.empty:
@@ -437,8 +437,8 @@ document.addEventListener('DOMContentLoaded', function () {{
 
     mapa.get_root().html.add_child(folium.Element(_estilos_responsive()))
 
-    destino = ruta_outputs(
-        cfg, f"mapa_anegamientos_{sufijo}{tag}_{generado:%Y%m%d-%H%M%S}.html")
+    destino = ruta_salida(
+        cfg, sufijo, f"mapa_anegamientos_{sufijo}{tag}_{generado:%Y%m%d-%H%M%S}.html")
     mapa.save(str(destino))
     log.info("Mapa guardado: %s", destino)
     return destino

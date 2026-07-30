@@ -17,7 +17,7 @@ from .utils import (
     leer_raster,
     log,
     ruta_data,
-    ruta_outputs,
+    ruta_salida,
 )
 
 PROFUNDIDAD_MIN_M = 0.05  # bajo esto se considera ruido, no anegamiento
@@ -89,8 +89,8 @@ def modelar_inundacion(cfg: dict, volumenes: pd.DataFrame,
             profundidad = np.maximum(profundidad, celdas)
 
     extension = (profundidad >= PROFUNDIDAD_MIN_M).astype("uint8")
-    ruta_prof = ruta_outputs(cfg, f"profundidad_{sufijo}.tif")
-    ruta_ext = ruta_outputs(cfg, f"extension_{sufijo}.tif")
+    ruta_prof = ruta_salida(cfg, sufijo, f"profundidad_{sufijo}.tif")
+    ruta_ext = ruta_salida(cfg, sufijo, f"extension_{sufijo}.tif")
     guardar_raster(ruta_prof, profundidad, transform, nodata=-9999)
     guardar_raster(ruta_ext, extension, transform, nodata=255, dtype="uint8")
 

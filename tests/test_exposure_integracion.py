@@ -14,7 +14,7 @@ from rasterio.transform import Affine
 from shapely.geometry import LineString, Point, box
 
 from inundaciones.exposure import _area_urbana_ha, evaluar_exposicion
-from inundaciones.utils import area_celda_m2, guardar_raster, ruta_data, ruta_outputs
+from inundaciones.utils import area_celda_m2, guardar_raster, ruta_data, ruta_salida
 
 TRANSFORM = Affine(0.001, 0.0, -71.0, 0.0, -0.001, -30.0)
 LAT_MEDIA = -30.0
@@ -36,16 +36,17 @@ def test_evaluar_exposicion_combina_urbano_raster_y_capas_osm(tmp_path):
         geometry=[box(-70.997, -30.006, -70.993, -30.002)], crs="EPSG:4326")
     zonas_recurrentes = gpd.GeoDataFrame(
         geometry=[box(-70.993, -30.006, -70.991, -30.002)], crs="EPSG:4326")
-    zonas_nuevas.to_file(ruta_outputs(cfg, f"zonas_nuevas_{sufijo}.geojson"), driver="GeoJSON")
+    zonas_nuevas.to_file(
+        ruta_salida(cfg, sufijo, f"zonas_nuevas_{sufijo}.geojson"), driver="GeoJSON")
     zonas_recurrentes.to_file(
-        ruta_outputs(cfg, f"zonas_recurrentes_{sufijo}.geojson"), driver="GeoJSON")
+        ruta_salida(cfg, sufijo, f"zonas_recurrentes_{sufijo}.geojson"), driver="GeoJSON")
 
     # superficie urbana anegada: 3x3 anegado y 3x3 urbano se solapan en 2x2 = 4 celdas
     extension = np.zeros((10, 10), dtype="uint8")
     extension[2:5, 2:5] = 1
     worldcover = np.full((10, 10), 10, dtype="uint8")  # 10 = no urbano
     worldcover[3:6, 3:6] = 50  # 50 = urbano (ESA WorldCover)
-    guardar_raster(tmp_path / "outputs" / f"extension_{sufijo}.tif", extension, TRANSFORM,
+    guardar_raster(ruta_salida(cfg, sufijo, f"extension_{sufijo}.tif"), extension, TRANSFORM,
                    nodata=255, dtype="uint8")
     guardar_raster(tmp_path / "data" / "landcover" / "worldcover.tif", worldcover, TRANSFORM,
                    nodata=255, dtype="uint8")
@@ -80,5 +81,5 @@ def test_evaluar_exposicion_combina_urbano_raster_y_capas_osm(tmp_path):
     assert nombres == {"Hospital Test", "s/n"}  # el sin-nombre cae al valor por defecto
 
     assert resumen["vias_km"] > 0.0
-    vias_expuestas = gpd.read_file(ruta_outputs(cfg, f"vias_expuestas_{sufijo}.geojson"))
+    vias_expuestas = gpd.read_file(ruta_salida(cfg, sufijo, f"vias_expuestas_{sufijo}.geojson"))
     assert len(vias_expuestas) == 1  # solo la vía que cruza el polígono, no la lejana

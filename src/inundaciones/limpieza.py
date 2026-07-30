@@ -37,11 +37,14 @@ PATRON_MAPA = re.compile(
 def _por_ciclo(raiz: Path) -> dict[tuple[str, str], list[tuple[str, Path]]]:
     """Agrupa los mapas de `raiz` en {(sufijo, ciclo): [(render, ruta), ...]}.
 
+    `rglob` en vez de `glob`: los mapas viven en `raiz/<gfs|ifs|escenario>/`
+    (ver `utils.ruta_salida`), no sueltos en `raiz`.
+
     Los valores quedan ordenados por timestamp de render, que es `%Y%m%d-%H%M%S`
     y por lo tanto ordena lexicográficamente igual que cronológicamente.
     """
     grupos: dict[tuple[str, str], list[tuple[str, Path]]] = defaultdict(list)
-    for f in raiz.glob("*.html"):
+    for f in raiz.rglob("*.html"):
         m = PATRON_MAPA.match(f.name)
         if m:
             grupos[(m["sufijo"], m["ciclo"])].append((m["render"], f))

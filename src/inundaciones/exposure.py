@@ -15,7 +15,7 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 
-from .utils import area_celda_m2, cargar_config, leer_raster, log, ruta_data, ruta_outputs
+from .utils import area_celda_m2, cargar_config, leer_raster, log, ruta_data, ruta_salida
 
 TIMEOUT_S = 600
 
@@ -115,12 +115,12 @@ def descargar_osm_region(cfg: dict) -> dict[str, Path]:
 
 
 def evaluar_exposicion(cfg: dict, sufijo: str = "proyectada") -> Path:
-    zonas = gpd.read_file(ruta_outputs(cfg, f"zonas_nuevas_{sufijo}.geojson"))
-    recurrentes = gpd.read_file(ruta_outputs(cfg, f"zonas_recurrentes_{sufijo}.geojson"))
+    zonas = gpd.read_file(ruta_salida(cfg, sufijo, f"zonas_nuevas_{sufijo}.geojson"))
+    recurrentes = gpd.read_file(ruta_salida(cfg, sufijo, f"zonas_recurrentes_{sufijo}.geojson"))
     todas = gpd.GeoDataFrame(geometry=list(zonas.geometry) + list(recurrentes.geometry),
                              crs="EPSG:4326")
     resumen = {"vias_km": 0.0, "urbano_ha": 0.0, "servicios": []}
-    destino = ruta_outputs(cfg, f"exposicion_{sufijo}.json")
+    destino = ruta_salida(cfg, sufijo, f"exposicion_{sufijo}.json")
     if todas.empty:
         destino.write_text(json.dumps(resumen, indent=2))
         return destino
@@ -128,7 +128,7 @@ def evaluar_exposicion(cfg: dict, sufijo: str = "proyectada") -> Path:
     poligono = todas.union_all().buffer(0.0005)  # ~50 m de tolerancia
 
     # superficie urbana anegada (WorldCover 50) — cálculo local
-    ext, transform, _ = leer_raster(ruta_outputs(cfg, f"extension_{sufijo}.tif"))
+    ext, transform, _ = leer_raster(ruta_salida(cfg, sufijo, f"extension_{sufijo}.tif"))
     lc = leer_raster(ruta_data(cfg, "landcover", "worldcover.tif"))[0]
     lat_media = (cfg["region"]["bbox"][1] + cfg["region"]["bbox"][3]) / 2
     celda_ha = area_celda_m2(transform, lat_media) / 1e4
@@ -147,7 +147,7 @@ def evaluar_exposicion(cfg: dict, sufijo: str = "proyectada") -> Path:
         afectadas, resumen["vias_km"] = _vias_expuestas(vias, poligono)
         if not afectadas.empty:
             afectadas[["geometry"]].to_file(
-                ruta_outputs(cfg, f"vias_expuestas_{sufijo}.geojson"),
+                ruta_salida(cfg, sufijo, f"vias_expuestas_{sufijo}.geojson"),
                 driver="GeoJSON")
     except Exception as exc:
         log.warning("Capas OSM no disponibles (%s); exposición solo con "

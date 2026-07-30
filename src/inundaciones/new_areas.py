@@ -14,7 +14,7 @@ from .utils import (
     leer_raster,
     log,
     ruta_data,
-    ruta_outputs,
+    ruta_salida,
 )
 
 AREA_MINIMA_CELDAS = 4  # descarta manchas menores (ruido de remuestreo)
@@ -39,7 +39,7 @@ def _filtrar_por_area_minima(gdf: gpd.GeoDataFrame, celda_km2: float) -> gpd.Geo
 
 
 def identificar_zonas_nuevas(cfg: dict, sufijo: str = "proyectada") -> dict[str, Path]:
-    extension, transform, _ = leer_raster(ruta_outputs(cfg, f"extension_{sufijo}.tif"))
+    extension, transform, _ = leer_raster(ruta_salida(cfg, sufijo, f"extension_{sufijo}.tif"))
     ruta_union = ruta_data(cfg, "historical", "huella_historica_union.tif")
     historico = (leer_raster(ruta_union)[0] == 1) if ruta_union.exists() \
         else np.zeros(extension.shape, dtype=bool)
@@ -53,12 +53,12 @@ def identificar_zonas_nuevas(cfg: dict, sufijo: str = "proyectada") -> dict[str,
 
     rutas = {}
     for nombre, mascara in [("zonas_nuevas", nuevas), ("zonas_recurrentes", recurrentes)]:
-        raster = ruta_outputs(cfg, f"{nombre}_{sufijo}.tif")
+        raster = ruta_salida(cfg, sufijo, f"{nombre}_{sufijo}.tif")
         guardar_raster(raster, mascara.astype("uint8"), transform, nodata=255,
                        dtype="uint8")
         gdf = _vectorizar(mascara, transform)
         gdf = _filtrar_por_area_minima(gdf, celda_km2)
-        geojson = ruta_outputs(cfg, f"{nombre}_{sufijo}.geojson")
+        geojson = ruta_salida(cfg, sufijo, f"{nombre}_{sufijo}.geojson")
         gdf.to_file(geojson, driver="GeoJSON")
         rutas[nombre] = geojson
         log.info("%s: %.1f km² en %d polígonos", nombre,

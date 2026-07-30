@@ -31,10 +31,14 @@ def _cfg(tmp_path):
     return {"rutas": {"data": "data", "outputs": "outputs"}, "region": {"id": "prueba"}}
 
 
-def _preparar(tmp_path, monkeypatch, nombres):
-    """Crea outputs/prueba/<nombres> bajo tmp_path y apunta RAIZ ahí."""
+def _preparar(tmp_path, monkeypatch, nombres, carpeta="gfs"):
+    """Crea outputs/prueba/<carpeta>/<nombres> bajo tmp_path y apunta RAIZ ahí.
+
+    `carpeta` es la subcarpeta por fuente (gfs/ifs/escenario, ver
+    `utils.ruta_salida`); todos los nombres de este módulo son mapas gfs.
+    """
     monkeypatch.setattr("inundaciones.utils.RAIZ", tmp_path)
-    destino = tmp_path / "outputs" / "prueba"
+    destino = tmp_path / "outputs" / "prueba" / carpeta
     destino.mkdir(parents=True)
     for n in nombres:
         (destino / n).write_text("<html></html>")
@@ -60,8 +64,11 @@ def test_mapas_de_ciclo_no_confunde_otros_ciclos_ni_fuentes(tmp_path, monkeypatc
         "mapa_anegamientos_gfs_20260718_06utc_20260718-100049.html",
         "mapa_anegamientos_gfs_20260718_12utc_20260718-155629.html",  # otra hora
         "mapa_anegamientos_gfs_20260719_06utc_20260719-071729.html",  # otro día
-        "mapa_anegamientos_ifs_20260718_06utc_20260718-100049.html",  # otra fuente
     ])
+    # otra fuente: vive en su propia subcarpeta (ver ruta_salida)
+    _preparar(tmp_path, monkeypatch, [
+        "mapa_anegamientos_ifs_20260718_06utc_20260718-100049.html",
+    ], carpeta="ifs")
     hallados = mapas_de_ciclo(_cfg(tmp_path), "gfs", "2026-07-18T06:00:00+00:00")
     assert [p.name for p in hallados] == [
         "mapa_anegamientos_gfs_20260718_06utc_20260718-100049.html"]

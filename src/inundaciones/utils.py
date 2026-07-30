@@ -47,6 +47,21 @@ def ruta_outputs(cfg: dict, *partes: str) -> Path:
     return _ruta_base(cfg, "outputs", *partes)
 
 
+def carpeta_fuente(sufijo: str) -> str:
+    """Subcarpeta de outputs/ para un sufijo: `gfs`, `ifs` o `escenario` para
+    cualquier otro (los escenarios sintéticos llevan su propio nombre de
+    sufijo, p. ej. `extremo_200mm`, no la palabra "escenario")."""
+    return sufijo if sufijo in ("gfs", "ifs") else "escenario"
+
+
+def ruta_salida(cfg: dict, sufijo: str, *partes: str) -> Path:
+    """Ruta bajo outputs/<región>/<gfs|ifs|escenario>/ para un archivo de
+    una corrida `sufijo`. Separa las salidas por fuente para que outputs/
+    no mezcle en un solo directorio años de renders GFS con los de IFS y
+    escenarios sintéticos."""
+    return ruta_outputs(cfg, carpeta_fuente(sufijo), *partes)
+
+
 def ciclo_tag(ciclo_iso: str | None) -> str:
     """Sufijo `_YYYYMMDD_HHutc` que identifica el ciclo en el nombre del mapa.
 
@@ -73,7 +88,7 @@ def mapas_de_ciclo(cfg: dict, sufijo: str, ciclo_iso: str | None) -> list[Path]:
     if not tag:
         return []
     patron = f"mapa_anegamientos_{sufijo}{tag}_*.html"
-    return sorted(ruta_outputs(cfg, patron).parent.glob(patron))
+    return sorted(ruta_salida(cfg, sufijo, patron).parent.glob(patron))
 
 
 def guardar_raster(ruta: Path, datos: np.ndarray, transform: Affine, crs="EPSG:4326",

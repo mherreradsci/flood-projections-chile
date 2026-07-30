@@ -1,7 +1,7 @@
 import pytest
 from rasterio.transform import Affine
 
-from inundaciones.utils import area_celda_m2, ruta_data, ruta_outputs
+from inundaciones.utils import area_celda_m2, carpeta_fuente, ruta_data, ruta_outputs, ruta_salida
 
 
 def test_area_celda_en_el_ecuador():
@@ -55,3 +55,21 @@ def test_ruta_outputs_usa_su_propia_clave_y_region(tmp_path):
            "region": {"id": "coquimbo"}}
     ruta = ruta_outputs(cfg, "mapa.html")
     assert ruta == tmp_path / "outputs" / "coquimbo" / "mapa.html"
+
+
+@pytest.mark.parametrize("sufijo,esperada", [
+    ("gfs", "gfs"),
+    ("ifs", "ifs"),
+    ("extremo_200mm", "escenario"),
+    ("costero_120mm", "escenario"),
+])
+def test_carpeta_fuente_agrupa_escenarios(sufijo, esperada):
+    assert carpeta_fuente(sufijo) == esperada
+
+
+def test_ruta_salida_agrega_la_subcarpeta_de_fuente(tmp_path):
+    cfg = {"rutas": {"data": str(tmp_path / "data"), "outputs": str(tmp_path / "outputs")},
+           "region": {"id": "coquimbo"}}
+    ruta = ruta_salida(cfg, "extremo_200mm", "extension_extremo_200mm.tif")
+    assert ruta == (tmp_path / "outputs" / "coquimbo" / "escenario"
+                    / "extension_extremo_200mm.tif")
