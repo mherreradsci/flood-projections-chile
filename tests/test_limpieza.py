@@ -9,11 +9,13 @@ dejaría de encontrar archivos y fallaría en silencio, no con un error.
 """
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
 from inundaciones.limpieza import (
     PATRON_MAPA,
+    _raster_de_mapa,
     ciclos_excedentes,
     duplicados_por_ciclo,
 )
@@ -28,6 +30,10 @@ def _crear(raiz, *nombres):
 
 def _mapa(sufijo, ciclo, render):
     return f"mapa_anegamientos_{sufijo}_{ciclo}_{render}.html"
+
+
+def _raster(sufijo, ciclo, render):
+    return f"mapa_anegamientos_{sufijo}_extension_{ciclo}_{render}.tif"
 
 
 class TestPatron:
@@ -55,6 +61,15 @@ class TestPatron:
     def test_ignora_el_formato_legado_sin_fecha(self):
         assert PATRON_MAPA.match(
             "mapa_anegamientos_ifs_12utc_20260716-184449.html") is None
+
+
+class TestRasterDeMapa:
+    def test_deriva_el_nombre_del_raster_pareado(self):
+        # mismo tag sufijo/ciclo/render que arma mapa.generar_mapa, solo
+        # cambia prefijo y extensión
+        html = Path("/x") / _mapa("gfs", "20260729_18utc", "20260729-190059")
+        assert _raster_de_mapa(html).name == _raster(
+            "gfs", "20260729_18utc", "20260729-190059")
 
 
 class TestDuplicadosPorCiclo:
@@ -91,6 +106,26 @@ class TestDuplicadosPorCiclo:
 
     def test_carpeta_vacia(self, tmp_path):
         assert duplicados_por_ciclo(tmp_path) == []
+
+    def test_arrastra_el_raster_pareado_del_render_sobrante(self, tmp_path):
+        viejo, nuevo = "20260729-130107", "20260729-153946"
+        _crear(tmp_path,
+               _mapa("gfs", "20260729_12utc", viejo),
+               _mapa("gfs", "20260729_12utc", nuevo),
+               _raster("gfs", "20260729_12utc", viejo),
+               _raster("gfs", "20260729_12utc", nuevo))
+        sobran = {f.name for f in duplicados_por_ciclo(tmp_path)}
+        assert sobran == {_mapa("gfs", "20260729_12utc", viejo),
+                          _raster("gfs", "20260729_12utc", viejo)}
+
+    def test_no_falla_si_el_raster_pareado_no_existe(self, tmp_path):
+        # el raster puede faltar (corrida vieja, anterior a este cambio);
+        # la poda del HTML no debe depender de que exista
+        _crear(tmp_path,
+               _mapa("gfs", "20260729_12utc", "20260729-130107"),
+               _mapa("gfs", "20260729_12utc", "20260729-153946"))
+        sobran = [f.name for f in duplicados_por_ciclo(tmp_path)]
+        assert sobran == [_mapa("gfs", "20260729_12utc", "20260729-130107")]
 
 
 class TestCiclosExcedentes:

@@ -1,9 +1,10 @@
 """Poda de outputs/: renders duplicados de un ciclo y ciclos antiguos.
 
 `outputs/` es el historial timestampeado y crece sin techo: cada corrida de
-`04_proyectar.py` agrega un HTML de ~4 MB, y reprocesar un ciclo agrega otro
-para el *mismo* ciclo en vez de reemplazarlo (el nombre lleva ciclo y timestamp
-de render). `reprocesar_ciclo_gfs.py` evita crear ese duplicado avisando, pero
+`04_proyectar.py` agrega un HTML de ~4 MB y su raster `extension_*` pareado
+(ver `mapa.generar_mapa`), y reprocesar un ciclo agrega otro par para el
+*mismo* ciclo en vez de reemplazarlo (el nombre lleva ciclo y timestamp de
+render). `reprocesar_ciclo_gfs.py` evita crear ese duplicado avisando, pero
 la ruta del cron no, así que igual se acumulan.
 
 Dos podas, independientes entre sí:
@@ -34,6 +35,28 @@ PATRON_MAPA = re.compile(
 )
 
 
+def _raster_de_mapa(ruta_html: Path) -> Path:
+    """Ruta del raster de susceptibilidad que acompaña un HTML de mapa:
+    mismo nombre base, con "_extension" insertado después del sufijo y
+    ".tif" en vez de ".html" (ver `mapa.generar_mapa`, que arma el mismo
+    nombre). No valida que `ruta_html` matchee `PATRON_MAPA` — llamar solo
+    sobre matches."""
+    m = PATRON_MAPA.match(ruta_html.name)
+    return ruta_html.with_name(
+        f"mapa_anegamientos_{m['sufijo']}_extension_{m['ciclo']}_{m['render']}.tif")
+
+
+def _con_raster(htmls: list[Path]) -> list[Path]:
+    """Cada HTML de mapa junto con su raster pareado, si existe."""
+    salida = []
+    for f in htmls:
+        salida.append(f)
+        raster = _raster_de_mapa(f)
+        if raster.exists():
+            salida.append(raster)
+    return salida
+
+
 def _por_ciclo(raiz: Path) -> dict[tuple[str, str], list[tuple[str, Path]]]:
     """Agrupa los mapas de `raiz` en {(sufijo, ciclo): [(render, ruta), ...]}.
 
@@ -52,9 +75,10 @@ def _por_ciclo(raiz: Path) -> dict[tuple[str, str], list[tuple[str, Path]]]:
 
 
 def duplicados_por_ciclo(raiz: Path) -> list[Path]:
-    """Renders sobrantes: de cada ciclo, todos menos el más reciente."""
-    return sorted(f for versiones in _por_ciclo(raiz).values()
-                  for _, f in versiones[:-1])
+    """Renders sobrantes: de cada ciclo, todos menos el más reciente (HTML y
+    su raster `extension_*` pareado, si existe)."""
+    htmls = [f for versiones in _por_ciclo(raiz).values() for _, f in versiones[:-1]]
+    return sorted(_con_raster(htmls))
 
 
 def ciclos_excedentes(raiz: Path, conservar: int) -> list[Path]:
@@ -76,7 +100,7 @@ def ciclos_excedentes(raiz: Path, conservar: int) -> list[Path]:
         # el ciclo es YYYYMMDD_HHutc: orden lexicográfico = cronológico
         for ciclo in sorted(ciclos)[:-conservar]:
             sobran += [f for _, f in grupos[(sufijo, ciclo)]]
-    return sorted(sobran)
+    return sorted(_con_raster(sobran))
 
 
 def limpiar(cfg: dict, conservar_ciclos: int | None = None,

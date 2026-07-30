@@ -5,6 +5,7 @@ zonas nuevas (rojo), vías y servicios expuestos.
 """
 
 import json
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -437,9 +438,18 @@ document.addEventListener('DOMContentLoaded', function () {{
 
     mapa.get_root().html.add_child(folium.Element(_estilos_responsive()))
 
-    destino = ruta_salida(
-        cfg, sufijo, f"mapa_anegamientos_{sufijo}{tag}_{generado:%Y%m%d-%H%M%S}.html")
+    # tag de ciclo+render compartido por el HTML y su raster de
+    # susceptibilidad: el raster copia el mismo nombre base que el mapa,
+    # insertando "_extension" después del sufijo, así un proceso externo que
+    # ya conoce el nombre del HTML deriva el del raster con una regla fija
+    # (ver limpieza._raster_de_mapa, que hace ese mismo reemplazo para
+    # podarlos juntos)
+    tag_render = f"{tag}_{generado:%Y%m%d-%H%M%S}"
+    destino = ruta_salida(cfg, sufijo, f"mapa_anegamientos_{sufijo}{tag_render}.html")
     mapa.save(str(destino))
+    shutil.copy2(
+        ruta_salida(cfg, sufijo, f"extension_{sufijo}.tif"),
+        ruta_salida(cfg, sufijo, f"mapa_anegamientos_{sufijo}_extension{tag_render}.tif"))
     log.info("Mapa guardado: %s", destino)
     return destino
 
