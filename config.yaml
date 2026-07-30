@@ -22,11 +22,12 @@ rutas:
   publicacion: publicacion
 
 mapa:
-  # Vista inicial del HTML [lat, lon] + zoom; comentar el bloque para volver
-  # al comportamiento por defecto (centro del bbox regional, zoom 8).
-  vista_inicial:
-    centro: [-29.945, -71.28]   # conurbación La Serena–Coquimbo
-    zoom: 12
+  # Vista inicial del HTML [lat, lon] + zoom. Comentado: usa el comportamiento
+  # por defecto (centro del bbox regional, zoom 8) en vez del centroide local.
+  # Descomentar para volver a centrar en La Serena–Coquimbo con zoom 12.
+  # vista_inicial:
+  #   centro: [-29.945, -71.28]   # conurbación La Serena–Coquimbo
+  #   zoom: 12
   # Lado mayor (px) de los PNG de las capas ráster incrustadas en el HTML.
   # El DEM de esta región mide 4454 px de lado mayor: con 6000 no se
   # remuestrea y los bloques del overlay miden lo mismo que las celdas de
