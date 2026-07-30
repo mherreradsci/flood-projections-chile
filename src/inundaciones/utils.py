@@ -1,7 +1,7 @@
 """Utilidades compartidas: configuración, rutas, logging y rasters."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -45,6 +45,18 @@ def ruta_data(cfg: dict, *partes: str) -> Path:
 
 def ruta_outputs(cfg: dict, *partes: str) -> Path:
     return _ruta_base(cfg, "outputs", *partes)
+
+
+def activar_log_a_archivo(cfg: dict, prefijo: str) -> Path:
+    """Agrega un FileHandler en outputs/<región>/logs/ para que la corrida
+    quede registrada aunque no pase por el wrapper de cron (que redirige
+    stdout/stderr a un log por corrida) — p. ej. una invocación manual."""
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")
+    ruta = ruta_outputs(cfg, "logs", f"{prefijo}_{ts}.log")
+    handler = logging.FileHandler(ruta, encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%H:%M:%S"))
+    log.addHandler(handler)
+    return ruta
 
 
 def carpeta_fuente(sufijo: str) -> str:

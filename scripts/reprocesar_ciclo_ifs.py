@@ -24,6 +24,19 @@ ciclo fuera de esa ventana falla con `HTTPError 404`, no con un ciclo
 distinto silencioso: `reprocesar` valida que el `ciclo` en el meta devuelto
 coincida exactamente con el pedido.
 
+El mismo 404 también sale por el otro extremo: un ciclo del día todavía sin
+publicar (medido 2026-07-30: el 06z publicó sus GRIB recién a las 12:27 UTC,
++6h27m sobre el nominal; a las 18:28 UTC el 12z aún solo tenía el bufr de
+trayectorias de ciclones, sin `tp`/`pl`). No confundir con la ventana de
+retención de arriba — acá el ciclo simplemente no existe todavía en origen.
+Ojo que esto NO aplica a `04_proyectar.py --fuente ifs` (sin `--ciclo`): el
+cliente de ECMWF resuelve "más reciente" retrocediendo de a 6h con HEAD
+requests (`client.py::latest()`) y nunca pide un ciclo inexistente; el 404
+por publicación tardía solo puede darse acá, al forzar `date`/`time`
+explícitos. Como referencia, ~8h después de la hora nominal del ciclo es un
+margen razonable antes de reintentar un backfill del ciclo del día — sin
+garantía dura, ECMWF puede demorarse más.
+
 Por defecto OMITE los ciclos que ya tienen mapa en `outputs/<region>/`: el
 nombre del HTML lleva ciclo *y* timestamp de render, así que reprocesar no
 reemplaza el archivo previo sino que agrega otro para el mismo ciclo. La
@@ -39,7 +52,6 @@ más viejos, para que el mapa publicado quede en el ciclo correcto).
 """
 
 import argparse
-import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -54,19 +66,7 @@ from inundaciones.mapa import generar_mapa
 from inundaciones.new_areas import identificar_zonas_nuevas
 from inundaciones.publicar import publicar_mapa
 from inundaciones.runoff import calcular_escorrentia
-from inundaciones.utils import cargar_config, log, mapas_de_ciclo, ruta_outputs
-
-
-def _activar_log_a_archivo(cfg: dict) -> Path:
-    """Agrega un FileHandler en outputs/<región>/logs/, igual que
-    `reprocesar_ciclo_gfs.py` (ver ese script para el porqué de hacerlo en
-    Python y no en el wrapper de cron)."""
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")
-    ruta = ruta_outputs(cfg, "logs", f"reprocesar_ifs_{ts}.log")
-    handler = logging.FileHandler(ruta, encoding="utf-8")
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%H:%M:%S"))
-    log.addHandler(handler)
-    return ruta
+from inundaciones.utils import activar_log_a_archivo, cargar_config, log, mapas_de_ciclo
 
 
 def _parse_ciclo(texto: str) -> datetime:
@@ -121,7 +121,7 @@ def main():
     args = parser.parse_args()
 
     cfg = cargar_config(args.config)
-    ruta_log = _activar_log_a_archivo(cfg)
+    ruta_log = activar_log_a_archivo(cfg, "reprocesar_ifs")
     log.info("== inicio == (log: %s)", ruta_log)
     try:
         hechos, omitidos = 0, 0

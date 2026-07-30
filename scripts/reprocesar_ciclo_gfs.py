@@ -31,7 +31,6 @@ más viejos, para que el mapa publicado quede en el ciclo correcto).
 """
 
 import argparse
-import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,20 +45,7 @@ from inundaciones.mapa import generar_mapa
 from inundaciones.new_areas import identificar_zonas_nuevas
 from inundaciones.publicar import publicar_mapa
 from inundaciones.runoff import calcular_escorrentia
-from inundaciones.utils import cargar_config, log, mapas_de_ciclo, ruta_outputs
-
-
-def _activar_log_a_archivo(cfg: dict) -> Path:
-    """Agrega un FileHandler en outputs/<región>/logs/, igual que el wrapper
-    de cron de 04_proyectar.py (correr_proyeccion_gfs.sh), pero hecho en
-    Python porque este script se invoca a mano con argumentos variables
-    (--ciclo repetible) y no calza con un wrapper de argumentos fijos."""
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")
-    ruta = ruta_outputs(cfg, "logs", f"reprocesar_{ts}.log")
-    handler = logging.FileHandler(ruta, encoding="utf-8")
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%H:%M:%S"))
-    log.addHandler(handler)
-    return ruta
+from inundaciones.utils import activar_log_a_archivo, cargar_config, log, mapas_de_ciclo
 
 
 def _parse_ciclo(texto: str) -> datetime:
@@ -116,7 +102,7 @@ def main():
     args = parser.parse_args()
 
     cfg = cargar_config(args.config)
-    ruta_log = _activar_log_a_archivo(cfg)
+    ruta_log = activar_log_a_archivo(cfg, "reprocesar")
     log.info("== inicio == (log: %s)", ruta_log)
     try:
         hechos, omitidos = 0, 0

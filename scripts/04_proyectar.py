@@ -21,7 +21,7 @@ from inundaciones.mapa import generar_mapa
 from inundaciones.new_areas import identificar_zonas_nuevas
 from inundaciones.publicar import publicar_mapa
 from inundaciones.runoff import calcular_escorrentia
-from inundaciones.utils import cargar_config, log
+from inundaciones.utils import activar_log_a_archivo, cargar_config, log
 
 
 def main():
@@ -36,32 +36,40 @@ def main():
     args = parser.parse_args()
 
     cfg = cargar_config(args.config)
-    if args.fuente in ("gfs", "ifs"):
-        ingest_forecast.descargar_pronostico(cfg, modelo=args.fuente)
-        sufijo = args.fuente
-    else:
-        # un nombre de escenario mal escrito es un error de uso: se reporta
-        # con el listado de los válidos y sin traceback, antes de tocar nada
-        try:
-            ingest_forecast.validar_escenario(cfg, args.escenario)
-        except ValueError as exc:
-            parser.error(str(exc))
-        ingest_forecast.generar_escenario(cfg, args.escenario)
-        sufijo = args.escenario
+    ruta_log = activar_log_a_archivo(cfg, "proyectar")
+    log.info("== inicio == (log: %s)", ruta_log)
+    try:
+        if args.fuente in ("gfs", "ifs"):
+            ingest_forecast.descargar_pronostico(cfg, modelo=args.fuente)
+            sufijo = args.fuente
+        else:
+            # un nombre de escenario mal escrito es un error de uso: se reporta
+            # con el listado de los válidos y sin traceback, antes de tocar nada
+            try:
+                ingest_forecast.validar_escenario(cfg, args.escenario)
+            except ValueError as exc:
+                parser.error(str(exc))
+            ingest_forecast.generar_escenario(cfg, args.escenario)
+            sufijo = args.escenario
 
-    factores = cargar_factores(cfg)
-    volumenes = calcular_escorrentia(cfg, factores=factores, sufijo=sufijo)
-    resultado = modelar_inundacion(cfg, volumenes, sufijo=sufijo)
-    identificar_zonas_nuevas(cfg, sufijo=sufijo)
-    if not args.sin_exposicion:
-        try:
-            evaluar_exposicion(cfg, sufijo=sufijo)
-        except Exception as exc:
-            log.warning("Exposición OSM falló (%s); el mapa se genera sin ella", exc)
-    mapa = generar_mapa(cfg, sufijo=sufijo)
-    publicar_mapa(cfg, mapa, sufijo)
-    log.info("Listo. Extensión proyectada: %.1f km². Abrir: %s",
-             resultado["area_km2"], mapa)
+        factores = cargar_factores(cfg)
+        volumenes = calcular_escorrentia(cfg, factores=factores, sufijo=sufijo)
+        resultado = modelar_inundacion(cfg, volumenes, sufijo=sufijo)
+        identificar_zonas_nuevas(cfg, sufijo=sufijo)
+        if not args.sin_exposicion:
+            try:
+                evaluar_exposicion(cfg, sufijo=sufijo)
+            except Exception as exc:
+                log.warning("Exposición OSM falló (%s); el mapa se genera sin ella", exc)
+        mapa = generar_mapa(cfg, sufijo=sufijo)
+        publicar_mapa(cfg, mapa, sufijo)
+        log.info("Listo. Extensión proyectada: %.1f km². Abrir: %s",
+                 resultado["area_km2"], mapa)
+    except Exception:
+        log.exception("Corrida abortada por un error")
+        raise
+    finally:
+        log.info("== fin ==")
 
 
 if __name__ == "__main__":
