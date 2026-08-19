@@ -1,4 +1,4 @@
-# Proyección de anegamientos — regiones de Coquimbo y Atacama
+# Proyección de anegamientos — regiones de Coquimbo, Atacama y Antofagasta
 
 [![CI](https://github.com/mherreradsci/flood-projections-chile/actions/workflows/ci.yml/badge.svg)](https://github.com/mherreradsci/flood-projections-chile/actions/workflows/ci.yml)
 ![Cobertura](docs/coverage.svg)
@@ -60,8 +60,9 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ### Multi-región
 
 Cada región vive en su propio archivo de configuración: `config.yaml` es la
-región por defecto (Coquimbo) y `config_atacama.yaml` la Región de Atacama.
-Los cuatro scripts aceptan `--config`; sin ese flag usan `config.yaml`:
+región por defecto (Coquimbo), `config_atacama.yaml` la Región de Atacama y
+`config_antofagasta.yaml` la Región de Antofagasta. Los cuatro scripts aceptan
+`--config`; sin ese flag usan `config.yaml`:
 
 ```bash
 # Coquimbo (config.yaml, por defecto)
@@ -84,6 +85,16 @@ definir `region.id`, `nombre`, `osm_geocode` y `bbox`, redefinir
 `calibracion.eventos` con eventos/huellas de esa región (ver los comentarios
 de `config_atacama.yaml` como guía del proceso, incluida la verificación de
 cobertura GFD/Sentinel-1) y correr 01→02→03→04 con `--config`.
+
+Antofagasta (agregada tras el sistema frontal del 17-19 de agosto de 2026:
+alerta roja SENAPRED en cuatro comunas, aluviones en Tocopilla, corte de la
+Ruta 1 con desvío del tráfico a la Ruta 5 Norte) es el caso extremo de región
+hiperárida: en régimen normal (~2-4 mm/año) el modelo da 0 km² por diseño
+(bajo el umbral de abstracción inicial `Ia` SCS-CN no produce escorrentía),
+así que el producto vive de los eventos excepcionales — el escenario sintético
+`frontal_30mm` replica el evento de agosto 2026 de forma reproducible, y los
+ciclos GFS/IFS reales del evento se rellenaron con
+`reprocesar_ciclo_{gfs,ifs}.py` (ver backfill más abajo).
 
 Cada corrida del paso 04 publica además su mapa con nombre estable en
 `publicacion/<region>/mapa_<fuente>.html` y actualiza
@@ -127,7 +138,7 @@ procesado.
 | Parámetro | Valores | Defecto | Descripción |
 |---|---|---|---|
 | `--fuente` | `gfs` \| `ifs` \| `escenario` | `gfs` | Origen de la lluvia: pronóstico GFS 0.25° (NOAA), pronóstico IFS 0.25° (ECMWF open-data) o escenario sintético definido en `config.yaml`. Con `gfs`/`ifs` descarga el ciclo vigente antes de modelar. |
-| `--escenario NOMBRE` | un nombre de la sección `escenarios:` de `config.yaml` (hoy: `extremo_200mm`, `moderado_100mm`, `costero_120mm`) | `extremo_200mm` | Escenario sintético a usar; solo tiene efecto con `--fuente escenario`. |
+| `--escenario NOMBRE` | un nombre de la sección `escenarios:` del config de la región (Coquimbo: `extremo_200mm`, `moderado_100mm`, `costero_120mm`; Atacama: `extremo_100mm`, `moderado_50mm`, `costero_70mm`; Antofagasta: `extremo_60mm`, `frontal_30mm`, `moderado_15mm`) | `extremo_200mm` | Escenario sintético a usar; solo tiene efecto con `--fuente escenario`. |
 | `--sin-exposicion` | flag (sin valor) | desactivado | Omite la consulta Overpass/OSM de vías y servicios expuestos; el mapa se genera sin esa capa. Si la consulta falla, el script continúa igual con una advertencia. |
 
 Ejemplos:
@@ -147,8 +158,8 @@ archivo ordena por ciclo) más GeoTIFF/GeoJSON en `outputs/<region>/` (p. ej. `o
 
 ### Corridas programadas (cron)
 
-`scripts/correr_proyeccion_{,atacama_}{gfs,ifs}.sh` son los wrappers para
-cron/systemd (uno por región × fuente): rutas absolutas, candado `flock`
+`scripts/correr_proyeccion_{,atacama_,antofagasta_}{gfs,ifs}.sh` son los
+wrappers para cron/systemd (uno por región × fuente): rutas absolutas, candado `flock`
 contra corridas solapadas y log por corrida en
 `outputs/<region>/logs/proyeccion_{gfs,ifs}_<timestamp>.log`.
 
@@ -176,13 +187,17 @@ que se borran a sí mismas y a las de corridas el 31 de agosto):
 ```cron
 0 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_gfs.sh # proyeccion-gfs-ago2026
 15 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_atacama_gfs.sh # proyeccion-atacama-gfs-ago2026
+20 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_antofagasta_gfs.sh # proyeccion-antofagasta-gfs-ago2026
 30 19 31 8 * crontab -l | grep -v proyeccion-gfs-ago2026 | crontab - # proyeccion-gfs-ago2026
 45 19 31 8 * crontab -l | grep -v proyeccion-atacama-gfs-ago2026 | crontab - # proyeccion-atacama-gfs-ago2026
+35 19 31 8 * crontab -l | grep -v proyeccion-antofagasta-gfs-ago2026 | crontab - # proyeccion-antofagasta-gfs-ago2026
 
 30 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_ifs.sh # proyeccion-ifs-ago2026
 45 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_atacama_ifs.sh # proyeccion-atacama-ifs-ago2026
+50 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_antofagasta_ifs.sh # proyeccion-antofagasta-ifs-ago2026
 50 19 31 8 * crontab -l | grep -v proyeccion-ifs-ago2026 | crontab - # proyeccion-ifs-ago2026
 55 19 31 8 * crontab -l | grep -v proyeccion-atacama-ifs-ago2026 | crontab - # proyeccion-atacama-ifs-ago2026
+40 19 31 8 * crontab -l | grep -v proyeccion-antofagasta-ifs-ago2026 | crontab - # proyeccion-antofagasta-ifs-ago2026
 ```
 
 Backfill puntual de un ciclo exacto (huecos por caída del cron, o para

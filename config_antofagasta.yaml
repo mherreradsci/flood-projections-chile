@@ -1,0 +1,187 @@
+# Configuración del sistema de proyección de anegamientos — Región de Antofagasta
+#
+# Uso: correr cada script con --config config_antofagasta.yaml
+#   .venv/bin/python scripts/01_descargar_datos.py --config config_antofagasta.yaml
+# Con region.id definido, los insumos y salidas viven en data/antofagasta/ y
+# outputs/antofagasta/, sin tocar el layout de Coquimbo ni Atacama.
+#
+# Contexto climático: desierto hiperárido (~2-4 mm/año en la costa). El
+# producto solo cobra sentido en eventos excepcionales, como el sistema
+# frontal del 17-19 de agosto de 2026 (alerta roja Senapred en Antofagasta,
+# Mejillones, Tocopilla y Taltal; aluviones en Tocopilla; corte de la Ruta 1
+# con desvío del tráfico a la Ruta 5 Norte). Ese evento está representado
+# tres veces: como escenario sintético (frontal_30mm), como evento de
+# calibración Sentinel-1 (agosto_2026) y vía backfill de los ciclos GFS/IFS
+# reales del 16-18 de agosto.
+#
+# PENDIENTE antes de confiar en las proyecciones: generar las huellas
+# Sentinel-1 de ambos eventos (ingest_sentinel1 vía openEO; para agosto_2026
+# hay que esperar la pasada del satélite posterior al evento) y afinar
+# precipitacion_mm/isoterma0_m de cada evento con registros DMC/DGA o CR2MET.
+
+proyecto:
+  nombre: anegamientos-antofagasta
+
+region:
+  nombre: "Región de Antofagasta"
+  osm_geocode: "Región de Antofagasta, Chile"
+  id: antofagasta
+  # bbox de respaldo/recorte [oeste, sur, este, norte] (EPSG:4326).
+  # Recortado a -68.0 por el este: cubre Antofagasta, Mejillones, Tocopilla,
+  # Taltal, Calama y San Pedro de Atacama, y deja fuera el altiplano
+  # endorreico fronterizo (sobre ~4000 m, que el filtro de isoterma apaga
+  # igual y es el peor caso de fill_depressions en el HAND). Las subcuencas
+  # del borde este quedan truncadas por el bbox — es esperable.
+  bbox: [-70.75, -26.1, -68.0, -20.9]
+
+rutas:
+  data: data
+  outputs: outputs
+  # copia estable por región (mapa_<sufijo>.html + manifest.json) que consume
+  # el servicio de publicación externo (carrusel por región)
+  publicacion: publicacion
+
+mapa:
+  # Vista inicial del HTML [lat, lon] + zoom. Comentado: usa el comportamiento
+  # por default (centro del bbox regional, zoom 8) en vez del centroide local.
+  # Descomentar para volver a centrar en Antofagasta con zoom 12.
+  # vista_inicial:
+  #   centro: [-23.65, -70.40]   # Antofagasta
+  #   zoom: 12
+  # Lado mayor (px) de los PNG de las capas ráster incrustadas en el HTML.
+  # El DEM de Antofagasta mide ~6432 px de lado mayor (el más grande de las
+  # tres regiones): con 7000 no se remuestrea y los bloques del overlay
+  # coinciden con las celdas de las capas vectoriales. Bajarlo aliviana el
+  # HTML y acelera la generación, a costa de bloques más gruesos.
+  max_pixeles_overlay: 7000
+
+dem:
+  # 90 m para la corrida regional completa; usar 30 para análisis por cuenca
+  resolucion_m: 90
+
+terreno:
+  # área de acumulación mínima (km²) para que una celda se considere cauce
+  umbral_drenaje_km2: 15
+  # HAND máximo considerado inundable (m sobre el drenaje más cercano)
+  hand_max_m: 15
+
+subcuencas:
+  hydrobasins_nivel: 8
+
+modelo:
+  # Curve Number por clase ESA WorldCover (condición AMC II, suelos
+  # hidrológicos tipo D: costras salinas, regolito compactado y vegetación
+  # casi nula — el desierto más árido de las tres regiones, +2 puntos sobre
+  # Atacama en las clases naturales). El CN alto además baja el umbral de
+  # abstracción inicial Ia = 0.2·S (CN 88 → Ia ≈ 6.9 mm; CN 90 → 5.6 mm):
+  # necesario para que eventos de 15-30 mm como el de agosto 2026 produzcan
+  # escorrentía — bajo Ia, SCS-CN da 0 por diseño. La calibración ajusta un
+  # factor de volumen por subcuenca, por lo que estos valores son el punto de
+  # partida, no el resultado final.
+  cn_por_worldcover:
+    10: 74    # bosque
+    20: 81    # matorral
+    30: 83    # pastizal
+    40: 84    # cultivos
+    50: 92    # urbano / construido
+    60: 90    # suelo desnudo / vegetación escasa (clase dominante en Antofagasta)
+    70: 98    # nieve y hielo
+    80: 100   # agua permanente
+    90: 85    # humedal herbáceo
+    95: 85    # manglar
+    100: 80   # musgo y liquen
+  cn_defecto: 88
+  # banda bajo la isoterma 0 donde la nieve húmeda no genera escorrentía líquida plena
+  banda_nieve_humeda_m: 300
+  factor_volumen_defecto: 1.0
+
+pronostico:
+  modelo: gfs        # gfs | ifs (ECMWF open-data 0.25°)
+  producto: pgrb2.0p25
+  horas: 72          # horizonte de acumulación (h)
+  # si el GRIB no trae altura de isoterma 0 utilizable, respaldo. Las
+  # tormentas cálidas altiplánicas llegan sobre 4500 m, pero los frentes
+  # fríos de invierno (agosto 2026) bajan a ~3000 m; 4000 es un término medio
+  # de respaldo — el valor real por corrida lo deriva el pronóstico.
+  isoterma0_defecto_m: 4000
+
+sentinel1:
+  # openEO en Copernicus Dataspace (cuenta gratuita: dataspace.copernicus.eu)
+  backend: "openeo.dataspace.copernicus.eu"
+  coleccion: SENTINEL1_GRD
+  resolucion_m: 90        # resolución de proceso server-side
+  umbral_db: -18.0        # sigma0 VV bajo esto = agua
+  hand_max_filtro_m: 30   # descarta detecciones altas sobre el drenaje (sombra radar)
+  # descarta celdas oscuras en TODOS los eventos S1 (salares/arenales lisos al
+  # radar, no inundación): imprescindible aquí — el Salar de Atacama y los
+  # salares del interior dominan la señal oscura, igual que en Atacama (donde
+  # el 51-64% del "agua" a -18 dB era superficie oscura permanente). Ojo: el
+  # filtro necesita ≥2 eventos S1 con dato para operar; con uno solo devuelve
+  # None y no filtra nada.
+  filtrar_oscuro_permanente: true
+
+# En Antofagasta los acumulados extremos son aún menores que en Atacama, pero
+# caen sobre el suelo más impermeable de las tres regiones. Referencias:
+# el aluvión de Antofagasta de junio de 1991 (tormenta cálida, el peor caso
+# histórico regional) y el frente frío del 17-19 de agosto de 2026 (~30 mm,
+# isoterma baja, nieve en el interior). Ajustar con IDF locales si se
+# dispone de ellas.
+escenarios:
+  extremo_60mm:
+    precipitacion_mm: 60
+    horas: 72
+    isoterma0_m: 4300
+  # réplica sintética del evento del 17-19 de agosto de 2026: frente frío de
+  # invierno con isoterma baja — reproducible sin depender de archivos de
+  # pronóstico que expiran
+  frontal_30mm:
+    precipitacion_mm: 30
+    horas: 72
+    isoterma0_m: 3000
+  # al borde del umbral Ia (~6.9 mm con CN 88): control de sensibilidad
+  moderado_15mm:
+    precipitacion_mm: 15
+    horas: 72
+    isoterma0_m: 3800
+
+calibracion:
+  # Eventos candidatos (ambos Sentinel-1; GFD quedó descartado en Atacama
+  # para marzo 2015 y aquí aplica lo mismo):
+  # - marzo_2015 (el aluvión de Atacama también golpeó Taltal y el sur de la
+  #   región): ventana extendida tras el peak porque la cobertura S1A de
+  #   marzo 2015 sobre Chile es rala. precipitacion_mm/isoterma0_m heredados
+  #   de config_atacama.yaml y rebajados al borde sur de la región —
+  #   PENDIENTE afinar con DMC/DGA (Taltal) o CR2MET.
+  # - agosto_2026 (frente frío del 17-19 ago: aluviones en Tocopilla,
+  #   quebradas activadas en Taltal y Antofagasta): ventana extendida al
+  #   31-08 para capturar la pasada del satélite posterior al evento; la
+  #   huella no existirá hasta que openEO tenga esa adquisición.
+  #   precipitacion_mm e isoterma0_m son estimaciones preliminares de prensa
+  #   (pronóstico de hasta 30 mm; nieve en Calama) — PENDIENTE afinar.
+  # Nota: ambos eventos quedan bajo el régimen 70-110 mm donde la agregación
+  # P/CN de runoff es exacta, así que el sesgo de agregación documentado en
+  # CLAUDE.md aplica aquí; no "corregirlo" sin re-calibrar.
+  eventos:
+    - nombre: marzo_2015
+      fuente: sentinel1
+      inicio: "2015-03-24"
+      fin: "2015-04-05"
+      precipitacion_mm: 60
+      isoterma0_m: 4300
+    - nombre: agosto_2026
+      fuente: sentinel1
+      inicio: "2026-08-16"
+      fin: "2026-08-31"
+      precipitacion_mm: 30
+      isoterma0_m: 3000
+  # rango de búsqueda del factor de volumen por subcuenca
+  factor_min: 0.05
+  factor_max: 8.0
+  csi_objetivo: 0.3
+
+exposicion:
+  # consultas OSM sobre las zonas proyectadas
+  vias: ["motorway", "trunk", "primary", "secondary", "tertiary", "residential"]
+  servicios: ["hospital", "clinic", "school", "fire_station", "police"]
+  # overpass-api.de banea tras consultas masivas; usar espejo por default
+  overpass_endpoint: "https://overpass.kumi.systems/api"
