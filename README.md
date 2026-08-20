@@ -182,24 +182,24 @@ horario a la hora de publicación real (el margen se reduce a minutos y
 cualquier día que ECMWF se demore un poco más, sale 404).
 
 Ejemplo vigente (con guardia de año y entradas de autolimpieza que se borran
-a sí mismas y a las de corridas el 31 de diciembre de 2026; el tag `ago2026`
-es solo un identificador — quedó del bloque original de agosto y no indica la
-fecha de expiración, que la fijan las líneas de autolimpieza):
+a sí mismas y a las de corridas el 31 de diciembre de 2026; el tag `dic2026`
+es un identificador que por convención nombra el mes de expiración, pero la
+fecha efectiva la fijan las líneas de autolimpieza, no el tag):
 
 ```cron
-0 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_gfs.sh # proyeccion-gfs-ago2026
-15 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_atacama_gfs.sh # proyeccion-atacama-gfs-ago2026
-20 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_antofagasta_gfs.sh # proyeccion-antofagasta-gfs-ago2026
-30 20 31 12 * crontab -l | grep -v proyeccion-gfs-ago2026 | crontab - # proyeccion-gfs-ago2026
-45 20 31 12 * crontab -l | grep -v proyeccion-atacama-gfs-ago2026 | crontab - # proyeccion-atacama-gfs-ago2026
-35 20 31 12 * crontab -l | grep -v proyeccion-antofagasta-gfs-ago2026 | crontab - # proyeccion-antofagasta-gfs-ago2026
+0 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_gfs.sh # proyeccion-gfs-dic2026
+15 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_atacama_gfs.sh # proyeccion-atacama-gfs-dic2026
+20 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_antofagasta_gfs.sh # proyeccion-antofagasta-gfs-dic2026
+30 20 31 12 * crontab -l | grep -v proyeccion-gfs-dic2026 | crontab - # proyeccion-gfs-dic2026
+45 20 31 12 * crontab -l | grep -v proyeccion-atacama-gfs-dic2026 | crontab - # proyeccion-atacama-gfs-dic2026
+35 20 31 12 * crontab -l | grep -v proyeccion-antofagasta-gfs-dic2026 | crontab - # proyeccion-antofagasta-gfs-dic2026
 
-30 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_ifs.sh # proyeccion-ifs-ago2026
-45 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_atacama_ifs.sh # proyeccion-atacama-ifs-ago2026
-50 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_antofagasta_ifs.sh # proyeccion-antofagasta-ifs-ago2026
-50 20 31 12 * crontab -l | grep -v proyeccion-ifs-ago2026 | crontab - # proyeccion-ifs-ago2026
-55 20 31 12 * crontab -l | grep -v proyeccion-atacama-ifs-ago2026 | crontab - # proyeccion-atacama-ifs-ago2026
-40 20 31 12 * crontab -l | grep -v proyeccion-antofagasta-ifs-ago2026 | crontab - # proyeccion-antofagasta-ifs-ago2026
+30 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_ifs.sh # proyeccion-ifs-dic2026
+45 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_atacama_ifs.sh # proyeccion-atacama-ifs-dic2026
+50 1,7,13,19 * * * [ "$(date +\%Y)" = "2026" ] && /home/mherrera/Proyectos/meteorologia/meteorologia-flood-projections/scripts/correr_proyeccion_antofagasta_ifs.sh # proyeccion-antofagasta-ifs-dic2026
+50 20 31 12 * crontab -l | grep -v proyeccion-ifs-dic2026 | crontab - # proyeccion-ifs-dic2026
+55 20 31 12 * crontab -l | grep -v proyeccion-atacama-ifs-dic2026 | crontab - # proyeccion-atacama-ifs-dic2026
+40 20 31 12 * crontab -l | grep -v proyeccion-antofagasta-ifs-dic2026 | crontab - # proyeccion-antofagasta-ifs-dic2026
 ```
 
 Backfill puntual de un ciclo exacto (huecos por caída del cron, o para
