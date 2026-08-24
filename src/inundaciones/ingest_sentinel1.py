@@ -73,8 +73,11 @@ def descargar_backscatter(cfg: dict, evento: dict, conn=None) -> Path | None:
     for i, (o, s, e, n) in enumerate(teselas):
         pieza = dir_teselas / f"tesela_{i:02d}.tif"
         if pieza.exists():
-            piezas.append(pieza)
-            continue
+            if pieza.stat().st_size > 0:
+                piezas.append(pieza)
+                continue
+            log.warning("  tesela %d/%d: archivo cacheado vacío (descarga previa "
+                        "interrumpida) — se re-descarga", i + 1, len(teselas))
         cubo = conn.load_collection(
             cfg["sentinel1"]["coleccion"],
             spatial_extent={"west": o, "south": s, "east": e, "north": n},
@@ -86,12 +89,15 @@ def descargar_backscatter(cfg: dict, evento: dict, conn=None) -> Path | None:
         cubo = cubo.apply(lambda x: 10 * x.log(base=10))  # lineal → dB
         cubo = cubo.resample_spatial(resolution=res_deg, projection=4326,
                                      method="average")
+        temp = pieza.with_name(pieza.name + ".tmp")
         try:
-            cubo.download(str(pieza))
+            cubo.download(str(temp))
+            temp.replace(pieza)  # atómico: nunca deja un .tif truncado si se corta acá
             piezas.append(pieza)
             log.info("  tesela %d/%d OK", i + 1, len(teselas))
         except Exception as exc:
             # sin escenas en la tesela/ventana o error transitorio del backend
+            temp.unlink(missing_ok=True)
             log.warning("  tesela %d/%d falló: %s", i + 1, len(teselas),
                         str(exc)[:150])
 
